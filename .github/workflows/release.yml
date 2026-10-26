@@ -1,4 +1,4 @@
-# Builds the Windows installer on GitHub's Windows machines and attaches them to a Release.
+# Builds the Windows installer and the portable ZIP on GitHub's Windows machines and attaches them to a Release.
 # Runs when a version tag (v1.2.3) is pushed, or by hand from the Actions tab.
 name: Build installers
 
@@ -18,7 +18,9 @@ jobs:
         include:
           - os: windows-latest
             script: dist:win
-            files: dist/*.exe
+            files: |
+              dist/*.exe
+              dist/*.zip
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -51,7 +53,8 @@ jobs:
 
           | Your computer | File |
           |---|---|
-          | **Windows 10 / 11** | `Cutline-Setup-….exe` |
+          | **Windows 10 / 11** (install) | `Cutline-Setup-….exe` |
+          | **Windows 10 / 11** (portable, no install: unzip and run `Cutline.exe`) | `Cutline-Portable-….zip` |
 
           Already have this version of Cutline? It updates itself: Menu › Settings › Updates.
           Installation steps are in the [README](https://github.com/reirako-pixel/Cutline-Max#install).

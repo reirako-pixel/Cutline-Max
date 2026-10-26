@@ -8,8 +8,31 @@ const crypto = require("node:crypto");
 const { Readable } = require("node:stream");
 const { setupUpdates } = require("./updater.cjs");
 
-// Updates come from this customised copy's own releases, never from the original project.
-setupUpdates({ repo: "reirako-pixel/Cutline-Max", assets: { win32: /^Cutline-Setup-.*\.exe$/i, darwin: /\.dmg$/i } });
+/**
+ * Portable mode (Windows): Cutline unzipped from Cutline-Portable-*.zip, so there is no installer's
+ * uninstaller next to Cutline.exe. Then everything the app keeps (settings, recent projects, autosave,
+ * smooth-preview copies, downloaded caption / voice models) lives in "Cutline Data" next to Cutline.exe,
+ * so the folder can be moved to another PC or a USB drive. Falls back to the normal place if that
+ * folder can't be written (e.g. unzipped somewhere read-only).
+ */
+const exeDir = path.dirname(process.execPath);
+const portableDir = (() => {
+  if (process.platform !== "win32" || !app.isPackaged) return null;
+  if (process.env.PORTABLE_EXECUTABLE_DIR) return null; // electron-builder's single-file portable (not used here)
+  if (fs.readdirSync(exeDir).some((f) => /^Uninstall .*\.exe$/i.test(f))) return null; // installed copy
+  const data = path.join(exeDir, "Cutline Data");
+  try { fs.mkdirSync(data, { recursive: true }); fs.accessSync(data, fs.constants.W_OK); return data; } catch { return null; }
+})();
+if (portableDir) app.setPath("userData", portableDir);
+ipcMain.on("cutline:portable", (e) => { e.returnValue = portableDir; });
+
+// Updates come from this customised copy's own releases, never from the original project. The installed
+// app updates with the installer; the portable one with the portable ZIP.
+setupUpdates({
+  repo: "reirako-pixel/Cutline-Max",
+  assets: { win32: portableDir ? /^Cutline-Portable-.*\.zip$/i : /^Cutline-Setup-.*\.exe$/i, darwin: /\.dmg$/i },
+  portable: portableDir ? { appDir: exeDir, exe: process.execPath } : null,
+});
 
 const root = path.join(__dirname, "..");
 const token = crypto.randomBytes(16).toString("hex"); // guards /local-file against other pages on this PC

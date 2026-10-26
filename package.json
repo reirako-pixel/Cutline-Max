@@ -1,7 +1,7 @@
 {
   "name": "cutline",
   "productName": "Cutline",
-  "version": "1.27.2",
+  "version": "1.28.0",
   "description": "Free, open-source CapCut-style video editor: multi-track timeline, keyframes, 57 effects, filters, background removal, auto-captions, text-to-speech, voice effects and 4K export.",
   "author": "Mehal45",
   "homepage": "https://github.com/Mehal45/Cutline",
@@ -40,9 +40,16 @@
           "arch": [
             "x64"
           ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
         }
       ],
-      "icon": "build/icon.ico"
+      "icon": "build/icon.ico",
+      "artifactName": "Cutline-Portable-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,

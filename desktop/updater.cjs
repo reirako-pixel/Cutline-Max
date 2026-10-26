@@ -17,9 +17,10 @@ function newer(a, b) {
 
 /**
  * repo: "Owner/Name" on GitHub. assets: { win32: /Setup-.*\.exe$/, darwin: /\.dmg$/ } — which release file
- * is this computer's installer.
+ * is this computer's installer. portable: { appDir, exe } when running from an unzipped portable folder;
+ * then the asset is the portable ZIP, and updating unpacks it over that folder.
  */
-function setupUpdates({ repo, assets }) {
+function setupUpdates({ repo, assets, portable = null }) {
   let latest = null; // { version, notes, page, asset: { name, url, size } | null }
   let file = null; // the downloaded installer
   let downloading = null;
@@ -85,6 +86,7 @@ function setupUpdates({ repo, assets }) {
       return false;
     }
     if (!file) throw new Error("Download the update first.");
+    if (portable) { installPortable(file, portable); return true; }
     // Close normally (the app saves your work on the way out); once it has quit, the installer runs
     // silently into the same folder (--updated keeps shortcuts and settings) and opens the new version
     // (--force-run) — the way electron-updater does it.
@@ -96,6 +98,38 @@ function setupUpdates({ repo, assets }) {
     return true;
   });
   ipcMain.handle("updates:open-page", () => shell.openExternal(latest?.page || `https://github.com/${repo}/releases/latest`));
+}
+
+/**
+ * Portable update: once Cutline has closed (saving your work), a hidden PowerShell script unpacks the new
+ * ZIP, copies it over the app folder (the "Cutline Data" folder isn't in the ZIP, so it's untouched) and
+ * starts the new version.
+ */
+function installPortable(zip, { appDir, exe }) {
+  const work = path.join(os.tmpdir(), `${app.getName()} update`, "unpacked");
+  const script = path.join(os.tmpdir(), `${app.getName()} update`, "update-portable.ps1");
+  const q = (s) => "'" + String(s).replace(/'/g, "''") + "'";
+  // Windows PowerShell reads scripts without a BOM in the old code page: the BOM keeps non-English folder names working.
+  fs.writeFileSync(script, "\ufeff" + [
+    "$ErrorActionPreference = 'Stop'",
+    `$appPid = ${process.pid}`,
+    "for ($i = 0; $i -lt 200 -and (Get-Process -Id $appPid -ErrorAction SilentlyContinue); $i++) { Start-Sleep -Milliseconds 250 }",
+    "Start-Sleep -Milliseconds 500",
+    `$work = ${q(work)}`,
+    "if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Recurse -Force }",
+    `Expand-Archive -LiteralPath ${q(zip)} -DestinationPath $work -Force`,
+    // The ZIP may hold the files directly or inside one folder: use the folder that has the .exe.
+    `$src = (Get-ChildItem -LiteralPath $work -Recurse -Filter ${q(path.basename(exe))} | Select-Object -First 1).DirectoryName`,
+    "if (-not $src) { throw 'The update has no app in it.' }",
+    `Copy-Item -Path (Join-Path $src '*') -Destination ${q(appDir)} -Recurse -Force`,
+    `Start-Process -FilePath ${q(exe)}`,
+    "Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue",
+  ].join("\r\n"), "utf8");
+  app.once("quit", () => {
+    spawn("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", script],
+      { detached: true, stdio: "ignore", windowsHide: true }).unref();
+  });
+  setTimeout(() => app.quit(), 100);
 }
 
 module.exports = { setupUpdates, newer };

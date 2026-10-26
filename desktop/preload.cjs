@@ -28,6 +28,8 @@ contextBridge.exposeInMainWorld("cutlineDesktop", {
   }),
   untitledPath: () => ipcRenderer.invoke("cutline:untitled-path"),
   pickFolder: (start) => ipcRenderer.invoke("cutline:pick-folder", start),
+  /** Portable copy: the "Cutline Data" folder next to Cutline.exe where it keeps everything (null when installed). */
+  portableDir: ipcRenderer.sendSync("cutline:portable"),
   exportBegin: (name) => ipcRenderer.invoke("cutline:export-begin", name),
   exportWrite: (id, data, position) => ipcRenderer.invoke("cutline:export-write", id, data, position),
   exportEnd: (id, abort) => ipcRenderer.invoke("cutline:export-end", id, abort),

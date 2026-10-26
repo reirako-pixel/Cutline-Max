@@ -67,6 +67,10 @@ export function SettingsDialog({ onClose, start }) {
           ${sec === "appearance" && html`
             <${Row} label="Skin" hint="Changes the colours of the whole app. Your videos and exports are not affected."><//>
             <${SkinPicker} />`}
+          ${sec === "projects" && desktop?.portableDir && html`
+            <${Row} label="Portable copy" hint="This Cutline runs without installing. Its settings, recent projects, autosave and downloaded models are kept next to Cutline.exe, so you can move the whole folder to another PC or a USB drive.">
+              <div class="set-folder"><span class="ell" title=${desktop.portableDir}>${desktop.portableDir}</span>
+                <button onClick=${() => desktop.showInFolder(desktop.portableDir)}><${Icon} n="folder-open" /> Show</button></div><//>`}
           ${sec === "projects" && html`
             <${Row} label="Save new projects in" hint="Untitled projects are saved here when you close Cutline, and Save asks here first.">
               <${Folder} k="projectsDir" empty="Documents › Cutline Projects" /><//>
