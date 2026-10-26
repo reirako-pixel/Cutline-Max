@@ -11,6 +11,7 @@ import { decodeMedia } from "./media-audio.js";
 import { loadCutout } from "./segment.js";
 import { hasKeys } from "./keyframes.js";
 import { hasCurve, sourceSpan, rateSamples } from "./speed.js";
+import { viz, vizUsed, audioKey, analyzeSamples } from "./vizdata.js";
 
 /** Every piece of timeline audio: { item, start, buf-source media } — main clips, overlay layers, audio items. */
 function audioSources(project, level = 0) {
@@ -101,6 +102,26 @@ export async function mixAudio(project, sampleRate = 48000, channels = 2) {
     src.start(start, item.in || 0, span);
   }
   return ctx.startRendering();
+}
+
+/**
+ * Makes sure the visualizer analysis matches the project's current sound (mixes and analyses it if not).
+ * Does nothing when no visualizer or beat-synced clip is used. Concurrent calls share one run.
+ */
+export async function ensureVizAnalysis(project) {
+  if (!vizUsed(project)) return null;
+  const key = audioKey(project);
+  if (viz.data?.key === key) return viz.data;
+  if (viz.pending?.key === key) return viz.pending.promise;
+  const run = (async () => {
+    const buf = await mixAudio(project, 22050, 1);
+    const data = await analyzeSamples(buf.getChannelData(0), buf.sampleRate);
+    data.key = key;
+    if (viz.pending?.key === key) { viz.data = data; viz.pending = null; }
+    return data;
+  })();
+  viz.pending = { key, promise: run };
+  try { return await run; } catch (e) { if (viz.pending?.key === key) viz.pending = null; throw e; }
 }
 
 async function pickAudioCodec(sampleRate, numberOfChannels) {
@@ -251,6 +272,7 @@ async function exportOnce(project, onProgress, signal, opts = {}) {
     if (codec === "avc") throw new Error("This browser cannot encode H.264 video. Try Chrome or Edge.");
     throw new Error(`This computer can't encode ${VIDEO_CODECS[codec].label.split(" (")[0]} at ${width}×${height}. Pick H.264 or a smaller size.`);
   }
+  await ensureVizAnalysis(project); // visualizers and beat sync follow the same numbers as the preview
   const usesCutout = [...project.main, ...(project.overlays || [])].some((x) => x.cutout?.mode);
   if (usesCutout && !(await loadCutout())) throw new Error("Background removal couldn't load (check your internet connection).");
   const audio = await pickAudioCodec(48000, 2);
@@ -380,6 +402,7 @@ export function wavBlob(buf) {
 
 /** The frame at time t as a full-resolution PNG. */
 export async function exportFrame(project, t) {
+  try { await ensureVizAnalysis(project); } catch { /* the frame still saves, visualizers at rest */ }
   const canvas = new OffscreenCanvas(project.width, project.height);
   const decoders = new Map();
   renderLock.exporting = true;

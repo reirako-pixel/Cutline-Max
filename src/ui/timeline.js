@@ -21,6 +21,7 @@ import { addDefaultText } from "../presets.js";
 import { startReplace, ReplaceDialog } from "./replace.js";
 import { startCrop } from "./mask.js";
 import { shapeName } from "./shapes.js";
+import { vizStyleName } from "../vizdraw.js";
 import { lastDur } from "../settings.js";
 import { html, fmt, Icon } from "./kit.js";
 
@@ -876,7 +877,7 @@ export function Timeline() {
 
         ${textTracks.map((tr) => html`<div class=${"track text-track" + (trackFlags(project, "text").locked ? " locked" : "") + (trackFlags(project, "text").hidden ? " hidden" : "")} data-lane="text" data-track=${tr} key=${"t" + tr}>
           <${TrackHead} k="text" label=${`Text${textTracks.length > 1 ? " " + (tr + 1) : ""}`} icon="type" project=${project} mute=${false} />
-          ${project.texts.filter((t) => (t.track ?? 0) === tr).map((t) => laneItem("text", t, "text" + (t.caption ? " caption" : "") + (t.shape ? " shape" : ""), t.shape ? "◆ " + shapeName(t.shape.type) : t.text,
+          ${project.texts.filter((t) => (t.track ?? 0) === tr).map((t) => laneItem("text", t, "text" + (t.caption ? " caption" : "") + (t.shape ? " shape" : "") + (t.viz ? " viz" : ""), t.viz ? "♫ " + (t.vizName || vizStyleName(t.viz.style)) : t.shape ? "◆ " + shapeName(t.shape.type) : t.text,
             t.sound && project.media[t.sound.mediaId] ? html`<b class="badge sndbadge" title=${"Sound: " + project.media[t.sound.mediaId].name}>🔊</b>` : null))}
         </div>`)}
 

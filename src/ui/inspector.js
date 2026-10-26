@@ -23,6 +23,8 @@ import { MaskSection, startCrop } from "./mask.js";
 import { lastDur, rememberDur } from "../settings.js";
 import { copySettings, pasteSettings } from "../actions.js";
 import { ShapeFields, shapeName } from "./shapes.js";
+import { VizFields, BeatSyncSection } from "./visualizer.js";
+import { vizStyleName } from "../vizdraw.js";
 
 /** "Save as preset": keeps this text's whole look for one-click reuse (Text tab › My presets). */
 function SavePreset({ t, save: saveFn, label = "Save as preset", hint = "Save font, size, colour, shadow, position, animation and length" }) {
@@ -411,7 +413,7 @@ function VisualInspector({ kind, item, project }) {
   const t = tabs.some(([k]) => k === tab) ? tab : "video";
   return html`<${Shell} tabs=${tabs} tab=${t} setTab=${setTab} note=${media?.name}>
     ${t === "video" && html`
-      <${Seg} items=${[["basic", "Basic"], ["removebg", "Remove BG"], ["mask", "Mask"], ["effects", "Effects"]]} value=${sub} onChange=${setSub} />
+      <${Seg} items=${[["basic", "Basic"], ["removebg", "Remove BG"], ["mask", "Mask"], ["effects", "Effects"], ["beat", "Beat sync"]]} value=${sub} onChange=${setSub} />
       ${sub === "basic" && html`
         <${TransformSection} kind=${kind} id=${item.id} />
         <${BlendSection} kind=${kind} item=${item} />
@@ -431,7 +433,8 @@ function VisualInspector({ kind, item, project }) {
         </div>`}
       ${sub === "removebg" && html`<${CutoutSection} kind=${kind} item=${item} />`}
       ${sub === "mask" && html`<${MaskSection} kind=${kind} item=${item} />`}
-      ${sub === "effects" && html`<${EffectsSection} kind=${kind} item=${item} />`}`}
+      ${sub === "effects" && html`<${EffectsSection} kind=${kind} item=${item} />`}
+      ${sub === "beat" && html`<${BeatSyncSection} kind=${kind} item=${item} />`}`}
     ${t === "audio" && html`<${AudioSection} kind=${kind} item=${item} media=${media} />`}
     ${t === "speed" && html`<${SpeedFields} speed=${clipSpeed(item)} ids=${[item.id]} kind=${kind} id=${item.id} />`}
     ${t === "animation" && html`<${AnimateSection} kind=${kind} item=${item} />`}
@@ -659,7 +662,24 @@ function RememberText({ t }) {
     Remember these settings for new texts</label>`;
 }
 
+/** A visualizer layer: its look and movement, position, and animation. */
+function VizInspector({ t }) {
+  const [tab, setTab] = useState("viz");
+  return html`<${Shell} tabs=${[["viz", "Visualizer"], ["animate", "Animation"]]} tab=${tab} setTab=${setTab} note=${t.vizName || vizStyleName(t.viz.style)}>
+    ${tab === "viz" && html`
+      <${VizFields} t=${t} />
+      <${TransformSection} kind="text" id=${t.id} />
+      <${Section} title="Opacity">
+        <${KSlider} kind="text" id=${t.id} path="opacity" label="Opacity" min=${0} max=${1} fallback=${1} format=${pct} />
+      <//>`}
+    ${tab === "animate" && html`<${AnimateSection} kind="text" item=${t} />`}
+    <${MatchAudioButton} kind="text" item=${t} />
+    <button class="danger wide" onClick=${deleteSelection}><${Icon} n="trash-2" /> Delete</button>
+  <//>`;
+}
+
 function TextInspector({ t }) {
+  if (t.viz) return html`<${VizInspector} t=${t} />`;
   if (t.shape) return html`<${ShapeInspector} t=${t} />`;
   return html`<${TextInspectorBody} t=${t} />`;
 }

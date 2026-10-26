@@ -113,6 +113,7 @@ html[data-skin] .seg.caption { background: var(--caption); }
 html[data-skin] .seg.overlay { background: var(--seg-overlay); }
 html[data-skin] .seg.audio { background: var(--seg-audio); }
 html[data-skin] .seg.effect { background: var(--seg-effect); }
+html[data-skin] .seg.text.viz { background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 45%, #000), color-mix(in srgb, var(--accent2) 45%, #000)); }
 html[data-skin] .seg.selected {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent), 0 0 14px 0 var(--glow);

@@ -9,6 +9,11 @@ import { cutoutFrame } from "./segment.js";
 import { needsLiveRoute, routeLive, isRouted } from "./audiofx.js";
 import { levelFor } from "./media-audio.js";
 import { meanSpeed, sourceAt, rateAt } from "./speed.js";
+import { drawVizStyle } from "./vizdraw.js";
+import { levelAt, beatAt } from "./vizdata.js";
+
+/** Timeline time of the frame being drawn (visualizers and beat sync read the music at this moment). */
+let frameTime = 0;
 
 // ---------- easing + animation presets (pure functions of time) ----------
 
@@ -374,11 +379,13 @@ function drawVisual(ctx, project, item, lt, W, H) {
   const fit = Math.min(W / sw, H / sh);
   const fx = fxSettingsAt(item, lt);
   const src = (item.cutout?.mode && cutoutFrame(item, el, sw, sh)) || el;
-  const target = fx ? layer(W, H) : ctx;
+  const bs = beatSync(item);
+  const target = fx || bs?.layer ? layer(W, H) : ctx;
   const place = (c) => {
-    c.translate(tr.x * W + a.dx * W, tr.y * H + a.dy * H);
-    c.rotate((tr.rotation * Math.PI) / 180);
-    c.scale(a.scale * tr.scale * (item.flipH ? -1 : 1), a.scale * tr.scale * (item.flipV ? -1 : 1));
+    c.translate(tr.x * W + a.dx * W + (bs?.dx || 0) * W, tr.y * H + a.dy * H + (bs?.dy || 0) * H);
+    c.rotate(((tr.rotation + (bs?.rot || 0)) * Math.PI) / 180);
+    const z = bs?.zoom || 1;
+    c.scale(a.scale * tr.scale * z * (item.flipH ? -1 : 1), a.scale * tr.scale * z * (item.flipV ? -1 : 1));
   };
   const sx = crop.l * sw, sy = crop.t * sh;
   const cw = sw * (1 - crop.l - crop.r), ch = sh * (1 - crop.t - crop.b);
@@ -403,21 +410,77 @@ function drawVisual(ctx, project, item, lt, W, H) {
     masked.filter = "none"; masked.globalCompositeOperation = "source-over";
   }
   target.save();
-  if (!fx) {
+  if (!fx && !bs?.layer) {
     target.globalAlpha = a.alpha * tr.opacity;
     if (item.blend && item.blend !== "normal") target.globalCompositeOperation = BLEND_MODES[item.blend]?.[1] || "source-over";
   }
   if (masked) target.drawImage(masked.canvas, 0, 0);
   else { place(target); draw(target); }
   target.restore();
-  if (fx) {
-    const out = applyFx(target.canvas, fx, lt, W, H);
+  if (fx || bs?.layer) {
+    const out = fx ? applyFx(target.canvas, fx, lt, W, H) : target.canvas;
     ctx.save();
     ctx.globalAlpha = a.alpha * tr.opacity;
     if (item.blend && item.blend !== "normal") ctx.globalCompositeOperation = BLEND_MODES[item.blend]?.[1] || "source-over";
-    ctx.drawImage(out, 0, 0, W, H);
+    if (bs?.blur > 0.3) ctx.filter = `blur(${bs.blur.toFixed(1)}px)`;
+    if (bs?.glitch > 0.02) drawGlitch(ctx, out, bs.glitch, W, H);
+    else ctx.drawImage(out, 0, 0, W, H);
+    ctx.filter = "none";
+    if (bs?.flash > 0.01) {
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = a.alpha * tr.opacity * bs.flash;
+      ctx.drawImage(out, 0, 0, W, H);
+    }
     ctx.restore();
   }
+}
+
+// ---------- beat sync: clips and layers that move with the music ----------
+
+/** Beat sync types: [id, name]. */
+export const BEAT_TYPES = [["off", "Off"], ["zoom", "Zoom pulse"], ["shake", "Shake"], ["blur", "Blur"], ["flash", "Flash"], ["glitch", "Glitch"], ["spin", "Wobble"]];
+
+/**
+ * How a clip reacts to the music at the current frame, or null. item.beat = { type, amount 0..1, source: "beat" | "level" }.
+ * "beat" follows bass hits (kick drums), "level" follows how loud the music is.
+ */
+function beatSync(item) {
+  const b = item.beat;
+  if (!b?.type || b.type === "off") return null;
+  const v = (b.source === "level" ? levelAt(frameTime) : beatAt(frameTime)) * (b.amount ?? 0.5);
+  switch (b.type) {
+    case "zoom": return { zoom: 1 + 0.3 * v };
+    case "shake": {
+      const n = Math.floor(frameTime * 30);
+      const r = (s) => { const x = Math.sin(n * 91.7 + s * 47.3) * 43758.5453; return (x - Math.floor(x)) * 2 - 1; };
+      return { dx: r(1) * 0.035 * v, dy: r(2) * 0.035 * v, rot: r(3) * 2.5 * v, zoom: 1 + 0.04 * v };
+    }
+    case "spin": return { rot: Math.sin(frameTime * 9) * 6 * v, zoom: 1 + 0.05 * v };
+    case "blur": return { layer: true, blur: v * 18 };
+    case "flash": return { layer: true, flash: v * 0.8 };
+    case "glitch": return { layer: true, glitch: v };
+    default: return null;
+  }
+}
+
+/** Draws a layer in horizontal slices pushed sideways, with a coloured ghost: a digital glitch of strength g. */
+function drawGlitch(ctx, src, g, W, H) {
+  const n = Math.floor(frameTime * 24);
+  const rnd = (s) => { const x = Math.sin(n * 12.9898 + s * 78.233) * 43758.5453; return x - Math.floor(x); };
+  const slices = 10;
+  let y = 0;
+  for (let i = 0; i < slices; i++) {
+    const h = i === slices - 1 ? H - y : Math.max(2, Math.round((H / slices) * (0.4 + rnd(i) * 1.2)));
+    const off = rnd(i + 50) < 0.45 ? (rnd(i + 99) - 0.5) * 2 * W * 0.06 * g : 0;
+    ctx.drawImage(src, 0, y, W, h, off, y, W, h);
+    y += h;
+    if (y >= H) break;
+  }
+  const a0 = ctx.globalAlpha, op = ctx.globalCompositeOperation;
+  ctx.globalCompositeOperation = "screen";
+  ctx.globalAlpha = a0 * 0.45 * g;
+  ctx.drawImage(src, W * 0.012 * g, 0, W, H);
+  ctx.globalAlpha = a0; ctx.globalCompositeOperation = op;
 }
 
 // ---------- masks ----------
@@ -585,6 +648,39 @@ export function shapeOutline(c, type, w, h, radius = 0) {
 /** Shape size in canvas pixels (k = canvas width / 1920). */
 export const shapeSize = (s, k) => ({ w: s.w * k, h: (EQUAL_SIDES.has(s.type) ? s.w : s.h) * k });
 
+/**
+ * A visualizer layer: drawn on its own canvas, then laid on the frame twice: once blurred and added
+ * (the neon glow, strength = viz.glow), once sharp on top.
+ */
+function drawViz(ctx, item, a, tr, W, H) {
+  const v = item.viz, k = W / 1920;
+  const L = scratch(41, W, H);
+  L.setTransform(1, 0, 0, 1, 0, 0);
+  L.globalAlpha = 1; L.globalCompositeOperation = "source-over"; L.filter = "none";
+  L.clearRect(0, 0, W, H);
+  L.save();
+  L.translate(tr.x * W + a.dx * W, tr.y * H + a.dy * H);
+  L.rotate((tr.rotation * Math.PI) / 180);
+  L.scale(a.scale * tr.scale, a.scale * tr.scale);
+  drawVizStyle(L, v, frameTime, k);
+  L.restore();
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  const alpha = a.alpha * tr.opacity;
+  const glow = v.glow ?? 0.5;
+  if (glow > 0.01) {
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = alpha * Math.min(1, 0.35 + glow * 0.65);
+    ctx.filter = `blur(${(4 + glow * 22) * k * Math.max(0.5, tr.scale)}px)`;
+    ctx.drawImage(L.canvas, 0, 0);
+    ctx.filter = "none";
+    ctx.globalCompositeOperation = "source-over";
+  }
+  ctx.globalAlpha = alpha;
+  ctx.drawImage(L.canvas, 0, 0);
+  ctx.restore();
+}
+
 /** Draws a shape layer's shape at the origin (the caller has applied position, rotation and scale). */
 function drawShape(c, s, k) {
   const { w, h } = shapeSize(s, k);
@@ -627,6 +723,10 @@ export function itemBounds(project, kind, item, W, H, t) {
     const r = (tr.rotation * Math.PI) / 180;
     const dx = ox * Math.cos(r) - oy * Math.sin(r), dy = ox * Math.sin(r) + oy * Math.cos(r);
     return { cx: tr.x + dx / W, cy: tr.y + dy / H, w: (fw * (1 - c.l - c.r)) / W, h: (fh * (1 - c.t - c.b)) / H, rotation: tr.rotation };
+  }
+  if (item.viz) {
+    const tr = t == null ? { x: item.x, y: item.y, scale: item.scale || 1, rotation: item.rotation || 0 } : transformAt(item, lt, true);
+    return { cx: tr.x, cy: tr.y, w: (item.viz.w * (W / 1920) * tr.scale) / W, h: (item.viz.h * (W / 1920) * tr.scale) / H, rotation: tr.rotation };
   }
   if (item.shape) {
     const { w, h } = shapeSize(item.shape, W / 1920);
@@ -671,6 +771,7 @@ export function drawText(ctx, item, t, W, H) {
   const a = animState(item.anim, lt, item.dur);
   const tr = transformAt(item, lt, true);
   if (tr.opacity <= 0) return;
+  if (item.viz) { drawViz(ctx, item, a, tr, W, H); return; }
   const size = st.size * (W / 1920);
   ctx.save();
   ctx.globalAlpha = a.alpha * tr.opacity;
@@ -796,7 +897,7 @@ function roundRect(ctx, x, y, w, h, r) {
 export const frameStatus = { loading: false };
 
 export function drawFrame(ctx, project, t, opts = {}) {
-  if (!opts.nested) frameStatus.loading = false;
+  if (!opts.nested) { frameStatus.loading = false; frameTime = t; }
   const W = ctx.canvas.width, H = ctx.canvas.height;
   ctx.clearRect(0, 0, W, H);
   // Inside a compound clip with nothing on its main track, empty areas stay see-through.

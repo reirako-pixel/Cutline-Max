@@ -13,7 +13,8 @@ import {
 } from "./actions.js";
 import { SourceViewer, toggleSource, stepSource, markSource, addFromSource } from "./ui/source.js";
 import { hasKeys, setKey, setStatic } from "./keyframes.js";
-import { exportMp4, exportWav, exportFrame, supportedCodecs, VIDEO_CODECS, QUALITY, bitrateFor } from "./export.js";
+import { exportMp4, exportWav, exportFrame, supportedCodecs, VIDEO_CODECS, QUALITY, bitrateFor, ensureVizAnalysis } from "./export.js";
+import { vizUsed } from "./vizdata.js";
 import { transcribe, wordsToCaptions, CAPTION_MODELS } from "./captions.js";
 import { html, fmt, Field, Icon, Slider, secs, NumInput } from "./ui/kit.js";
 import { startProxies, setProxyMode } from "./proxy.js";
@@ -23,6 +24,7 @@ import { Home } from "./ui/home.js";
 import { Timeline, dragGesture, setToggle } from "./ui/timeline.js";
 import { MaskHandles, CropBox } from "./ui/mask.js";
 import { ShapesTab } from "./ui/shapes.js";
+import { VisualizerTab } from "./ui/visualizer.js";
 import { SettingsDialog } from "./ui/settings.js";
 import { UpdateBar, startUpdateChecks } from "./ui/updates.js";
 import { cacheGet, cacheSet, mediaKey } from "./cache.js";
@@ -224,6 +226,7 @@ const LIB_TABS = [
   ["elements", "Elements", "shapes"],
   ["shapes", "Shapes", "triangle"],
   ["audio", "Audio", "music"],
+  ["visualizer", "Visualizer", "audio-waveform"],
   ["text", "Text", "type"],
   ["effects", "Effects", "sparkles"],
   ["transitions", "Transitions", "arrow-left-right"],
@@ -243,6 +246,7 @@ const SUB_NAV = {
   captions: [["auto", "Auto captions"]],
   filters: [["all", "Filters"]],
   adjust: [["layer", "Adjustment layer"]],
+  visualizer: [["all", "All"], ["bars", "Bars"], ["lines", "Lines"], ["round", "Circles"], ["particles", "Particles"]],
 };
 
 function LeftPanel() {
@@ -265,6 +269,7 @@ function LeftPanel() {
         ${tab === "media" && (sub === "kits" ? html`<${MediaKitsTab} />` : html`<${MediaTab} />`)}
         ${tab === "elements" && html`<${ElementsTab} />`}
         ${tab === "shapes" && html`<${ShapesTab} part=${sub} />`}
+        ${tab === "visualizer" && html`<${VisualizerTab} part=${sub} />`}
         ${tab === "audio" && (sub === "mine" ? html`<${AudioPresetsTab} />` : html`<${AudioTab} part=${sub} />`)}
         ${tab === "text" && (sub === "captions" ? html`<${CaptionsForm} />` : html`<${TextTab} part=${sub} />`)}
         ${tab === "effects" && html`<${EffectsTab} cat=${+sub} />`}
@@ -414,7 +419,7 @@ function Player() {
   const ratio = (w, h) => edit((p) => Object.assign(p, { width: w, height: h }));
   return html`<section class=${"panel player" + (previewing ? " previewing" : "")}>
     ${previewing && html`<${SourceViewer} />`}
-    <div class="phead"><span>Player</span><span class="muted">${width}×${height} · ${useStore((s) => s.project.fps)} fps</span></div>
+    <div class="phead"><span>Player${useStore((s) => s.vizBusy) ? html` <span class="muted viz-busy"><span class="spin" /> Reading the music for visualizers…</span>` : ""}</span><span class="muted">${width}×${height} · ${useStore((s) => s.project.fps)} fps</span></div>
     <div class="stage" ref=${stage}>
       <canvas ref=${canvas} width=${previewW} height=${previewH} />
       ${useStore((s) => s.clipLoading) && html`<div class="clip-loading"><span class="spin" /> Loading video…</div>`}
@@ -575,7 +580,8 @@ function TransformOverlay({ rect }) {
     const ux = Math.cos(rad), uy = Math.sin(rad); // the shape's own width axis on screen
     const vx = -Math.sin(rad), vy = Math.cos(rad); // its height axis
     const horiz = side === "e" || side === "w", sign = side === "e" || side === "s" ? 1 : -1;
-    const s0 = item.shape, eq = s0.type === "square" || s0.type === "circle";
+    const box = item.viz ? "viz" : "shape"; // visualizers stretch the same way as shapes
+    const s0 = item[box], eq = box === "shape" && (s0.type === "square" || s0.type === "circle");
     const w0 = s0.w, h0 = eq ? s0.w : s0.h; // px on a 1920-wide frame
     const toScreen = (v) => (v * (W / 1920) * scale) / k;
     const half = toScreen(horiz ? w0 : h0) / 2;
@@ -589,8 +595,8 @@ function TransformOverlay({ rect }) {
       editLive((p) => {
         const t = p.texts.find((x) => x.id === item.id);
         if (!t) return;
-        t.shape = { ...t.shape, ...(eq ? { type: s0.type === "square" ? "rect" : "ellipse", w: w0, h: h0 } : {}) };
-        if (horiz) t.shape.w = size; else t.shape.h = size;
+        t[box] = { ...t[box], ...(eq ? { type: s0.type === "square" ? "rect" : "ellipse", w: w0, h: h0 } : {}) };
+        if (horiz) t[box].w = size; else t[box].h = size;
         setProps(p, "text", item.id, { x: (ncx - r.left) / r.width, y: (ncy - r.top) / r.height }, time);
       });
     });
@@ -631,9 +637,9 @@ function TransformOverlay({ rect }) {
           }}>
         ${single && ["nw", "ne", "sw", "se"].map((c) => html`<div key=${c} class=${"knob " + c}
           onPointerDown=${(e) => startScale(e, kind, item)} />`)}
-        ${single && item.shape && ["n", "s", "e", "w"].map((c) => html`<div key=${c} class=${"knob " + c} title=${`Drag to stretch the ${c === "n" || c === "s" ? "height" : "width"}`}
+        ${single && (item.shape || item.viz) && ["n", "s", "e", "w"].map((c) => html`<div key=${c} class=${"knob " + c} title=${`Drag to stretch the ${c === "n" || c === "s" ? "height" : "width"}`}
           onPointerDown=${(e) => startStretch(e, item, c)} />`)}
-        ${single && kind === "text" && !item.shape && ["w", "e"].map((c) => html`<div key=${c} class=${"knob " + c} title="Drag to make the text box wider or narrower (wider = fewer lines)"
+        ${single && kind === "text" && !item.shape && !item.viz && ["w", "e"].map((c) => html`<div key=${c} class=${"knob " + c} title="Drag to make the text box wider or narrower (wider = fewer lines)"
           onPointerDown=${(e) => startBoxWidth(e, item)} />`)}
         ${single && html`<div class="rot" title="Rotate (Shift snaps to 15°)" onPointerDown=${(e) => startRotate(e, kind, item)} />`}
       </div>`;
@@ -1190,8 +1196,25 @@ function useShortcuts(openShortcuts, openExport) {
   }, []);
 }
 
+/** Keeps the visualizer analysis in step with the project's sound (re-reads the music shortly after it changes). */
+function useVizAnalysis() {
+  const project = useStore((s) => s.project);
+  useEffect(() => {
+    const root = rootProject();
+    if (!vizUsed(root)) return;
+    const timer = setTimeout(async () => {
+      setState({ vizBusy: true });
+      try { await ensureVizAnalysis(rootProject()); }
+      catch (err) { console.warn("Visualizer: couldn't read the music", err); }
+      finally { setState({ vizBusy: false }); }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [project]);
+}
+
 function App() {
   const [dialog, setDialog] = useState(null);
+  useVizAnalysis();
   const timelineH = useStore((s) => s.timelineH);
   const home = useStore((s) => s.home);
   useShortcuts(() => setDialog("shortcuts"), () => setDialog("export"));
