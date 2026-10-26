@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
-  useStore, getState, setState, edit, editLive, undo, redo, projectDuration, isSelected, select, findItem,
+  useStore, getState, setState, edit, editLive, undo, redo, projectDuration, isSelected, select, findItem, checkpoint,
 } from "./store.js";
 import {
   drawFrame, frameStatus, syncMedia, framesReady, renderLock, activeClips, activeOverlays, itemBounds, hitTest, transformAt, TRANSITIONS,
@@ -487,6 +487,29 @@ function setProps(p, kind, id, props, time) {
   }
 }
 
+/**
+ * Arrow keys after clicking in the player: moves the selected items that are on screen by `px` frame pixels
+ * (1, or 10 with Shift). A burst of presses is one undo step. Returns false when nothing could move, so the
+ * arrows keep stepping the playhead.
+ */
+let lastNudge = 0;
+function nudgeSelection(dxPx, dyPx) {
+  const { project, time, selection } = getState();
+  const movers = visibleItems(project, time).filter((v) => selection.some((s) => s.kind === v.kind && s.id === v.item.id));
+  if (!movers.length) return false;
+  const now = performance.now();
+  if (now - lastNudge > 800) checkpoint();
+  lastNudge = now;
+  const dx = dxPx / project.width, dy = dyPx / project.height;
+  editLive((p) => movers.forEach(({ kind, item }) => {
+    const it = findItem(p, kind, item.id);
+    if (!it) return;
+    const cur = transformAt(it, localTime(p, kind, it, time), kind === "text");
+    setProps(p, kind, item.id, { x: cur.x + dx, y: cur.y + dy }, time);
+  }));
+  return true;
+}
+
 function TransformOverlay({ rect }) {
   const project = useStore((s) => s.project);
   const time = useStore((s) => (s.playing && !s.selection.length ? Math.floor(s.time * 4) / 4 : s.time));
@@ -630,7 +653,7 @@ function TransformOverlay({ rect }) {
       const b = bounds(kind, item);
       if (!b) return null;
       const single = selectedVisible.length === 1;
-      return html`<div key=${item.id} class=${"tbox " + kind}
+      return html`<div key=${item.id} class=${"tbox " + kind} title="Drag to move · Arrow keys nudge (Shift: 10 px) · Delete removes"
           style=${{
             left: (b.cx - b.w / 2) * rect.width, top: (b.cy - b.h / 2) * rect.height,
             width: b.w * rect.width, height: b.h * rect.height, transform: `rotate(${b.rotation}deg)`,
@@ -683,6 +706,7 @@ const SHORTCUTS = [
   ["Ctrl+E", "Export"],
   ["Esc", "Clear selection"],
   ["← / →", "Step one frame (Shift: 1 second)"],
+  ["Arrow keys (after clicking in the player)", "Move the selected object 1 px (Shift: 10 px)"],
   ["Home / End", "Go to start / end"],
   ["Ctrl + mouse wheel", "Zoom the timeline around the pointer (trackpad pinch too)"],
   ["Shift + mouse wheel", "Scroll the timeline sideways"],
@@ -1158,6 +1182,12 @@ function useShortcuts(openShortcuts, openExport) {
       if ((key === "delete" || key === "backspace") && e.shiftKey) return run(rippleDelete);
       if (key === "delete" || key === "backspace") return run(deleteSelection);
       if (key === "escape") return run(() => { if (getState().tool) setState({ tool: null }); else select([]); });
+      // After clicking in the player, the arrows move the selected objects instead of the playhead.
+      if (key.startsWith("arrow") && getState().focusArea === "preview" && !getState().playing) {
+        const step = e.shiftKey ? 10 : 1;
+        const d = { arrowleft: [-step, 0], arrowright: [step, 0], arrowup: [0, -step], arrowdown: [0, step] }[key];
+        if (d && nudgeSelection(d[0], d[1])) return run(() => {});
+      }
       if (key === "arrowleft") return run(() => seek(getState().time - (e.shiftKey ? 1 : 1 / fps)));
       if (key === "arrowright") return run(() => seek(getState().time + (e.shiftKey ? 1 : 1 / fps)));
       if (key === "home") return run(() => seek(0));
@@ -1171,6 +1201,9 @@ function useShortcuts(openShortcuts, openExport) {
     // Clicking the timeline, player or anywhere outside a box takes the focus out of the box, so the
     // keyboard shortcuts work on what you just clicked.
     const onDown = (e) => {
+      // Where you last clicked decides what the arrow keys move: objects (player) or the playhead (timeline).
+      const area = e.target.closest?.(".stage") ? "preview" : e.target.closest?.(".timeline, .panel.left, .transport") ? "timeline" : null;
+      if (area && area !== getState().focusArea) setState({ focusArea: area });
       const a = document.activeElement;
       if (a && a !== document.body && a.matches?.("input, textarea, select") && !e.target.closest?.("input, textarea, select, label")) a.blur();
     };
