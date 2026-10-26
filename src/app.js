@@ -210,6 +210,7 @@ function Header({ onExport, onShortcuts }) {
     <div class="title ell">${name}</div>
     <div class="row">
       <button class="ibtn" onClick=${onShortcuts} title="Keyboard shortcuts (?)"><${Icon} n="keyboard" /></button>
+      <button class="ibtn" onClick=${() => setState({ settingsOpen: "appearance" })} title="Skins: change the look of the app"><${Icon} n="palette" /></button>
       <button class="ibtn" onClick=${() => setState({ settingsOpen: true })} title="Settings (Ctrl+,)"><${Icon} n="settings" /></button>
       <button class="export-btn" onClick=${onExport} title="Export (Ctrl+E)"><${Icon} n="upload" /> Export</button>
     </div>
@@ -768,13 +769,54 @@ function sizeFor(project, p) {
   return { width: even(project.width * k), height: even(project.height * k) };
 }
 
+/** Seconds as 00:03:12. */
+const hms = (s) => { s = Math.max(0, Math.round(s)); return [s / 3600, (s % 3600) / 60, s % 60].map((n) => String(Math.floor(n)).padStart(2, "0")).join(":"); };
+/** A title as a file name Windows and macOS accept. */
+const fileSafe = (t) => (t || "").replace(/[<>:"/\\|?*\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().replace(/[. ]+$/, "") || projectName();
+const SHORT_CODEC = { avc: "H.264", hevc: "HEVC (H.265)", av1: "AV1", vp9: "VP9" };
+const remembered = (k, def) => { try { const v = localStorage.getItem(k); return v === null ? def : v === "1"; } catch { return def; } };
+const remember = (k, v) => { try { localStorage.setItem(k, v ? "1" : ""); } catch { /* ignore */ } };
+
+/** Presets for the Preset menu; `null` fields keep the project's own value. */
+const EXPORT_PRESETS = [
+  ["project", "Match to project settings", { res: null, fps: null, codec: "avc", quality: "high" }],
+  ["youtube", "YouTube 1080p", { res: 1080, fps: null, codec: "avc", quality: "high" }],
+  ["youtube4k", "YouTube 4K", { res: 2160, fps: null, codec: "avc", quality: "high" }],
+  ["social", "TikTok / Reels / Shorts", { res: 1080, fps: 30, codec: "avc", quality: "high" }],
+  ["small", "Small file (720p)", { res: 720, fps: 30, codec: "avc", quality: "standard" }],
+];
+
+/** An on/off switch with a label, like the export window's option rows. */
+const Switch = ({ on, onChange, label, hint, disabled }) => html`<label class=${"xswitch" + (disabled ? " off" : "")} title=${hint || ""}>
+  <input type="checkbox" checked=${!!on} disabled=${disabled} onChange=${(e) => onChange(e.target.checked)} />
+  <i aria-hidden="true" /> <span>${label}</span>
+</label>`;
+
+/** The thumbnail: the frame at `t`, rendered full size and shown small. */
+function useFrameImage(t, enabled = true) {
+  const [src, setSrc] = useState(null);
+  useEffect(() => {
+    if (!enabled) return;
+    let url = null, live = true;
+    const timer = setTimeout(async () => {
+      try { const blob = await exportFrame(getState().project, t); if (!live) return; url = URL.createObjectURL(blob); setSrc(url); } catch { /* keep the last one */ }
+    }, 150);
+    return () => { live = false; clearTimeout(timer); if (url) setTimeout(() => URL.revokeObjectURL(url), 1000); };
+  }, [t, enabled]);
+  return src;
+}
+
 function ExportDialog({ onClose }) {
   const p = getState().project;
+  const total = projectDuration(p);
+  const [tab, setTab] = useState("video");
+  const [title, setTitle] = useState(projectName());
   const [progress, setProgress] = useState(0);
   const [phase, setPhase] = useState("idle");
   const [url, setUrl] = useState(null);
   const [saved, setSaved] = useState(null); // desktop: where the video was written
   const [error, setError] = useState(null);
+  useStore((s) => s.settings); // the Save to folder lives in the settings
   const def = appSettings();
   const [res, setRes] = useState(def.exportRes === "project" ? Math.min(p.width, p.height) : def.exportRes);
   const [fps, setFps] = useState(def.exportFps === "project" ? p.fps : def.exportFps);
@@ -784,8 +826,14 @@ function ExportDialog({ onClose }) {
   const [customKbps, setCustomKbps] = useState(def.exportKbps || 40000);
   const [smooth, setSmooth] = useState(() => { try { return localStorage.getItem("cutline.smoothMotion") || "off"; } catch { return "off"; } });
   const [blur, setBlur] = useState(() => { try { return +(localStorage.getItem("cutline.motionBlur") ?? 0); } catch { return 0; } });
+  const [advanced, setAdvanced] = useState(false);
+  const [thumbT, setThumbT] = useState(Math.min(getState().time, Math.max(0, total - 0.01)));
+  const [pickThumb, setPickThumb] = useState(false);
+  const [saveThumb, setSaveThumb] = useState(() => remembered("cutline.saveThumb", false));
+  const [openWhenDone, setOpenWhenDone] = useState(() => remembered("cutline.openWhenDone", false));
   const [support, setSupport] = useState(null);
   const abort = useRef(null);
+  const thumb = useFrameImage(thumbT, total > 0);
   const size = sizeFor(p, res);
   useEffect(() => { setSupport(null); supportedCodecs(size.width, size.height, fps).then(setSupport); }, [res, fps]);
   // What you pick here is remembered: the next export opens with the same settings (also Settings › Export).
@@ -796,106 +844,193 @@ function ExportDialog({ onClose }) {
     const t = setTimeout(() => { for (const [k, v] of Object.entries(now)) if (appSettings()[k] !== v) setSetting(k, v); }, 400);
     return () => clearTimeout(t);
   }, [res, fps, codec, quality, encoder, customKbps]);
+
+  const short = Math.min(p.width, p.height);
+  const presetValues = (v) => ({ res: v.res ?? short, fps: v.fps ?? p.fps, codec: v.codec, quality: v.quality });
+  const preset = EXPORT_PRESETS.find(([, , v]) => { const x = presetValues(v); return x.res === res && x.fps === fps && x.codec === codec && x.quality === quality; })?.[0] || "custom";
+  const usePreset = (k) => { const v = EXPORT_PRESETS.find(([id]) => id === k)?.[2]; if (!v) return; const x = presetValues(v); setRes(x.res); setFps(x.fps); setCodec(x.codec); setQuality(x.quality); };
+
+  const kbps = Math.round(bitrateFor(size.width, size.height, fps, quality, customKbps) / 1000);
+  const mb = tab === "video" ? ((kbps + 160) * 1000 * total) / 8 / 1e6
+    : tab === "audio" ? (48000 * 2 * 2 * total) / 1e6
+    : (size.width * size.height * 1.5) / 1e6; // a typical PNG frame
+  const sizeText = mb >= 1000 ? `${(mb / 1000).toFixed(1)} GB` : mb >= 10 ? `${Math.round(mb)} MB` : `${mb.toFixed(1)} MB`;
+
+  const saveDir = desktop && def.exportDir && def.askExportPath === false ? def.exportDir : "";
+  const pickDir = async () => { const d = await desktop?.pickFolder?.(def.exportDir || undefined); if (d) { setSetting("exportDir", d); setSetting("askExportPath", false); } };
+  const name = fileSafe(title);
+
+  const finish = async (videoPath) => {
+    if (!saveThumb) return;
+    try {
+      const png = await exportFrame(getState().project, thumbT);
+      if (videoPath && desktop?.exportSidecar) await desktop.exportSidecar(videoPath, new Uint8Array(await png.arrayBuffer()));
+      else download(png, name + ".png");
+    } catch (err) { toast("Thumbnail not saved: " + err.message, 3000); }
+  };
   const run = async () => {
     pause();
-    setPhase("running");
     setError(null);
+    if (tab === "audio") {
+      try { setPhase("running"); toast("Mixing audio…"); download(await exportWav(rootProject()), name + ".wav"); setPhase("idle"); toast("Audio exported"); }
+      catch (err) { setError(err.message); setPhase("idle"); }
+      return;
+    }
+    if (tab === "frame") {
+      try { download(await exportFrame(getState().project, thumbT), `${name} ${thumbT.toFixed(2)}s.png`); toast("Frame exported"); }
+      catch (err) { setError(err.message); }
+      return;
+    }
+    setPhase("running");
+    setProgress(0);
     abort.current = new AbortController();
     const started = performance.now();
     try {
       await loadProjectFonts(getState().project);
       const o = { ...size, fps, codec, quality, customKbps, encoder, software: encoder === "software", smooth: { method: smooth, blur } };
       if (desktop?.exportBegin) {
-        // Desktop: choose where to save first, then the video is written straight into that file.
-        const file = await desktop.exportBegin(projectName() + ".mp4");
+        // Desktop: the file is written straight to disk (the Save to folder, or wherever the Save dialog says).
+        const file = await desktop.exportBegin(name + ".mp4");
         if (!file) { setPhase("idle"); return; }
-        o.sink = { write: (d, p) => desktop.exportWrite(file.id, d, p), close: () => desktop.exportEnd(file.id) };
+        o.sink = { write: (d, at) => desktop.exportWrite(file.id, d, at), close: () => desktop.exportEnd(file.id) };
         try { await exportMp4(rootProject(), setProgress, abort.current.signal, o); }
         catch (err) { await desktop.exportEnd(file.id, true); throw err; }
+        await finish(file.path);
         setSaved(file.path);
         // A fresh address each time: an earlier export saved over the same file must never be shown instead.
         setUrl(desktop.fileUrl(file.path) + "&v=" + Date.now());
         setPhase(`in ${((performance.now() - started) / 1000).toFixed(1)}s`);
+        if (openWhenDone) desktop.showInFolder(file.path);
         return;
       }
       const blob = await exportMp4(rootProject(), setProgress, abort.current.signal, o);
       setUrl(URL.createObjectURL(blob));
+      await finish(null);
       setPhase(`in ${((performance.now() - started) / 1000).toFixed(1)}s · ${(blob.size / 1e6).toFixed(1)} MB`);
     } catch (err) {
-      setError(err.name === "AbortError" ? "Cancelled." : err.message);
+      setError(err.name === "AbortError" ? "Export cancelled." : err.message);
       setPhase("idle");
     }
   };
   const busy = phase === "running";
-  return html`<${Modal} title="Export video" onClose=${() => { abort.current?.abort(); onClose(); }}>
-    <div class="grid2">
-      <${Field} label="Resolution">
-        <select value=${res} disabled=${busy} onChange=${(e) => setRes(+e.target.value)}>
-          ${[...new Set([...RESOLUTIONS.map(([, v]) => v), Math.min(p.width, p.height)])].sort((a, b) => a - b).map((v) => {
-            const s = sizeFor(p, v);
-            const name = RESOLUTIONS.find(([, x]) => x === v)?.[0] || `${v}p`;
-            return html`<option value=${v}>${name} · ${s.width}×${s.height}</option>`;
-          })}
-        </select>
-      <//>
-      <${Field} label="Frame rate">
-        <select value=${fps} disabled=${busy} onChange=${(e) => setFps(+e.target.value)}>
-          ${[24, 25, 30, 50, 60, 90, 120].map((f) => html`<option value=${f}>${f} fps${f > 60 ? " (smooth motion)" : ""}</option>`)}
-        </select>
-      <//>
-      <${Field} label="Encoder">
-        <select value=${encoder} disabled=${busy} title="Hardware = graphics card (fast). Software = processor (slower, always works). Default in Settings."
-          onChange=${(e) => setEncoder(e.target.value)}>
-          <option value="auto">Auto</option><option value="hardware">Hardware (GPU)</option><option value="software">Software (CPU)</option>
-        </select>
-      <//>
-      <${Field} label="Smooth motion">
-        <select value=${smooth} disabled=${busy} title="Makes in-between frames when the export has more frames than your clips (e.g. 60 fps recordings at 90 or 120 fps) and for slow motion"
-          onChange=${(e) => { setSmooth(e.target.value); try { localStorage.setItem("cutline.smoothMotion", e.target.value); } catch {} }}>
-          <option value="flow">Motion interpolation (best)</option>
-          <option value="blend">Frame blending (fast)</option>
-          <option value="off">Off (repeat frames)</option>
-        </select>
-      <//>
-      <${Field} label="Motion blur">
-        <select value=${blur} disabled=${busy || smooth === "off"} title="A little blur along the motion, like a real camera shutter"
-          onChange=${(e) => { setBlur(+e.target.value); try { localStorage.setItem("cutline.motionBlur", e.target.value); } catch {} }}>
-          <option value="0">None</option>
-          <option value="0.25">Light (minimal)</option>
-          <option value="0.5">Medium (film look)</option>
-        </select>
-      <//>
-      <${Field} label="Format">
-        <select value=${codec} disabled=${busy} onChange=${(e) => setCodec(e.target.value)}>
-          ${Object.entries(VIDEO_CODECS).map(([k, c]) => html`<option value=${k} disabled=${support && !support[k]}>${c.label}${support && !support[k] ? " — not available" : ""}</option>`)}
-        </select>
-      <//>
-      <${Field} label="Quality">
-        <select value=${quality} disabled=${busy} onChange=${(e) => setQuality(e.target.value)}>
-          ${Object.entries(QUALITY).map(([k, q]) => html`<option value=${k}>${q.label}</option>`)}
-        </select>
-      <//>
-    </div>
-    ${quality === "custom" && html`<${Field} label="Video bitrate (kbps)">
-      <div class="row">
-        <${NumInput} min=${500} max=${500000} step=${500} value=${customKbps} disabled=${busy} style=${{ flex: 1 }} onCommit=${setCustomKbps} />
-        ${[8000, 20000, 40000, 80000].map((k) => html`<button key=${k} class=${customKbps === k ? "chip on" : "chip"} disabled=${busy}
-          onClick=${() => setCustomKbps(k)}>${k / 1000}M</button>`)}
+  const done = !!url && tab === "video";
+  const close = () => { abort.current?.abort(); onClose(); };
+  const resOptions = [...new Set([...RESOLUTIONS.map(([, v]) => v), short])].sort((a, b) => a - b);
+
+  return html`<div class="modal-bg" onPointerDown=${busy ? undefined : close}>
+    <div class="modal xdlg" onPointerDown=${(e) => e.stopPropagation()} role="dialog" aria-label="Export">
+      <div class="xhead"><span>Export</span><button class="ibtn" onClick=${close} title="Close"><${Icon} n="x" /></button></div>
+      <div class="xtabs" role="tablist">
+        ${[["video", "Video"], ["audio", "Audio only"], ["frame", "Still frame"]].map(([k, l]) => html`<button key=${k} role="tab"
+          aria-selected=${tab === k} class=${tab === k ? "on" : ""} disabled=${busy} onClick=${() => { setTab(k); setError(null); }}>${l}</button>`)}
       </div>
-    <//>`}
-    <p class="muted">${size.width}×${size.height} · ${fps} fps · ${quality === "custom" ? "" : "~"}${(bitrateFor(size.width, size.height, fps, quality, customKbps) / 1e6).toFixed(1)} Mbps (${Math.round(bitrateFor(size.width, size.height, fps, quality, customKbps) / 1000).toLocaleString()} kbps) · MP4 · ${fmt(projectDuration(p))}</p>
-    ${phase === "idle" && html`<button class="primary wide" onClick=${run}>Start export</button>`}
-    ${busy && html`<div class="bar"><div style=${{ width: `${progress * 100}%` }} /></div>
-      <p class="status">${Math.round(progress * 100)}%</p>
-      <button class="wide" onClick=${() => abort.current.abort()}>Cancel</button>`}
-    ${url && html`<p class="status">Finished ${phase}</p>
-      <video src=${url} controls class="result" />
-      ${saved
-        ? html`<p class="muted ell" title=${saved}>Saved to ${saved}</p>
-          <button class="primary wide" onClick=${() => desktop.showInFolder(saved)}><${Icon} n="folder-open" /> Show in folder</button>`
-        : html`<a class="button primary wide" href=${url} download=${projectName() + ".mp4"}>Save MP4</a>`}`}
-    ${error && html`<p class="error">${error}</p>`}
-  <//>`;
+      <div class="xbody">
+        <div class="xleft">
+          <b class="xlabel">${tab === "frame" ? "Frame:" : "Thumbnail:"}</b>
+          <div class="xthumb" style=${{ aspectRatio: `${p.width} / ${p.height}` }}>
+            ${thumb ? html`<img src=${thumb} alt="Thumbnail at ${fmt(thumbT)}" />` : html`<${Icon} n="image" size=${28} />`}
+          </div>
+          ${tab !== "audio" && html`<button class="wide" disabled=${busy || total <= 0} onClick=${() => setPickThumb(!pickThumb)}>${pickThumb ? "Done" : "Change"}</button>`}
+          ${pickThumb && tab !== "audio" && html`<div class="xpick">
+            <input type="range" min="0" max=${Math.max(0, total - 0.01)} step="0.01" value=${thumbT} onInput=${(e) => setThumbT(+e.target.value)} aria-label="Thumbnail time" />
+            <div class="row between"><span class="muted">${fmt(thumbT)}</span>
+              <button class="mini" onClick=${() => setThumbT(Math.min(getState().time, Math.max(0, total - 0.01)))}>Use playhead</button></div>
+          </div>`}
+        </div>
+        <div class="xright">
+          ${done ? html`
+            <div class="xdone">
+              <p class="status"><${Icon} n="circle-check" /> Finished ${phase}</p>
+              <video src=${url} controls class="result" />
+              ${saved
+                ? html`<p class="muted ell" title=${saved}>Saved to ${saved}</p>
+                  <button class="primary wide" onClick=${() => desktop.showInFolder(saved)}><${Icon} n="folder-open" /> Show in folder</button>`
+                : html`<a class="button primary wide" href=${url} download=${name + ".mp4"}>Save MP4</a>`}
+              <button class="wide" onClick=${() => { setUrl(null); setSaved(null); setPhase("idle"); }}>Export again</button>
+            </div>` : html`
+          <label class="xfield"><span>Title</span>
+            <input value=${title} disabled=${busy} onInput=${(e) => setTitle(e.target.value)} placeholder=${projectName()} /></label>
+          <div class="xfield"><span>Save to</span>
+            <div class="xpath">
+              <span class="ell" title=${saveDir || ""}>${desktop ? (saveDir || "Ask where to save each time") : "Your browser's Downloads folder"}</span>
+              ${saveDir && html`<button class="ibtn" disabled=${busy} title="Ask where to save each time instead" onClick=${() => setSetting("askExportPath", true)}><${Icon} n="x" /></button>`}
+              ${desktop && html`<button class="ibtn" disabled=${busy} title="Choose a folder" onClick=${pickDir}><${Icon} n="folder" /></button>`}
+            </div>
+          </div>
+          <hr />
+          ${tab === "video" && html`
+            <label class="xfield"><span>Preset</span>
+              <select class="xpreset" value=${preset} disabled=${busy} onChange=${(e) => usePreset(e.target.value)}>
+                ${EXPORT_PRESETS.map(([k, l]) => html`<option key=${k} value=${k}>${l}</option>`)}
+                ${preset === "custom" && html`<option value="custom">Custom</option>`}
+              </select></label>
+            <div class="xbox">
+              <div class="xgrid">
+                <label class="xfield"><span>Format</span><select disabled=${busy} value="mp4"><option value="mp4">MP4</option></select></label>
+                <label class="xfield"><span>Resolution</span>
+                  <select value=${res} disabled=${busy} onChange=${(e) => setRes(+e.target.value)}>
+                    ${resOptions.map((v) => { const s = sizeFor(p, v); return html`<option key=${v} value=${v}>${s.width}*${s.height}</option>`; })}
+                  </select></label>
+                <label class="xfield"><span>Encoder</span>
+                  <select value=${codec} disabled=${busy} onChange=${(e) => setCodec(e.target.value)}>
+                    ${Object.keys(VIDEO_CODECS).map((k) => html`<option key=${k} value=${k} disabled=${support && !support[k]}>${SHORT_CODEC[k] || k}${support && !support[k] ? " (not available)" : ""}</option>`)}
+                  </select></label>
+                <label class="xfield"><span>Quality</span>
+                  <select value=${quality} disabled=${busy} onChange=${(e) => setQuality(e.target.value)}>
+                    ${Object.entries(QUALITY).map(([k, q]) => html`<option key=${k} value=${k}>${q.label}</option>`)}
+                  </select></label>
+              </div>
+              <div class="xsummary">
+                <span>${fps} fps</span><span>${kbps.toLocaleString()} kbps</span><span>${size.width}×${size.height}</span>
+                <button class="xadv" aria-expanded=${advanced} onClick=${() => setAdvanced(!advanced)}>Advanced <${Icon} n=${advanced ? "chevron-down" : "chevron-right"} /></button>
+              </div>
+              ${advanced && html`<div class="xgrid xadvanced">
+                <label class="xfield"><span>Frame rate</span>
+                  <select value=${fps} disabled=${busy} onChange=${(e) => setFps(+e.target.value)}>
+                    ${[24, 25, 30, 50, 60, 90, 120].map((f) => html`<option key=${f} value=${f}>${f} fps${f > 60 ? " (smooth motion)" : ""}</option>`)}
+                  </select></label>
+                <label class="xfield"><span>Encoding</span>
+                  <select value=${encoder} disabled=${busy} title="Hardware = graphics card (fast). Software = processor (slower, always works)." onChange=${(e) => setEncoder(e.target.value)}>
+                    <option value="auto">Auto</option><option value="hardware">Hardware (GPU)</option><option value="software">Software (CPU)</option>
+                  </select></label>
+                <label class="xfield"><span>Smooth motion</span>
+                  <select value=${smooth} disabled=${busy} title="Makes in-between frames when the export has more frames than your clips, and for slow motion"
+                    onChange=${(e) => { setSmooth(e.target.value); try { localStorage.setItem("cutline.smoothMotion", e.target.value); } catch {} }}>
+                    <option value="flow">Motion interpolation (best)</option><option value="blend">Frame blending (fast)</option><option value="off">Off (repeat frames)</option>
+                  </select></label>
+                <label class="xfield"><span>Motion blur</span>
+                  <select value=${blur} disabled=${busy || smooth === "off"} title="A little blur along the motion, like a real camera shutter"
+                    onChange=${(e) => { setBlur(+e.target.value); try { localStorage.setItem("cutline.motionBlur", e.target.value); } catch {} }}>
+                    <option value="0">None</option><option value="0.25">Light</option><option value="0.5">Medium (film look)</option>
+                  </select></label>
+                ${quality === "custom" && html`<label class="xfield xspan"><span>Video bitrate (kbps)</span>
+                  <div class="row">
+                    <${NumInput} min=${500} max=${500000} step=${500} value=${customKbps} disabled=${busy} style=${{ flex: 1 }} onCommit=${setCustomKbps} />
+                    ${[8000, 20000, 40000, 80000].map((k) => html`<button key=${k} class=${customKbps === k ? "chip on" : "chip"} disabled=${busy} onClick=${() => setCustomKbps(k)}>${k / 1000}M</button>`)}
+                  </div></label>`}
+              </div>`}
+            </div>
+            <div class="xswitches">
+              <${Switch} on=${saveThumb} disabled=${busy} label="Save thumbnail as PNG too" hint="Saves the thumbnail frame next to the video, with the same name"
+                onChange=${(v) => { setSaveThumb(v); remember("cutline.saveThumb", v); }} />
+              ${desktop && html`<${Switch} on=${openWhenDone} disabled=${busy} label="Show in folder when done"
+                onChange=${(v) => { setOpenWhenDone(v); remember("cutline.openWhenDone", v); }} />`}
+            </div>`}
+          ${tab === "audio" && html`<p class="muted">Exports the whole mix (music, voice-overs and clip sound) as a WAV file: 48 kHz, stereo, uncompressed.</p>`}
+          ${tab === "frame" && html`<p class="muted">Saves the frame shown on the left as a ${p.width}×${p.height} PNG. Click Change to pick another moment.</p>`}
+          ${error && html`<p class="error">${error}</p>`}`}
+        </div>
+      </div>
+      <div class="xfoot">
+        ${busy && tab === "video" ? html`
+          <div class="xprogress"><div class="bar"><div style=${{ width: `${progress * 100}%` }} /></div><span>${Math.round(progress * 100)}%</span></div>
+          <button onClick=${() => abort.current.abort()}>Cancel</button>` : html`
+          <span>Duration: <b>${hms(tab === "frame" ? 0 : total)}</b></span>
+          <span>Size: <b>${sizeText}</b> (estimated)</span>
+          <button class="primary xgo" disabled=${busy || total <= 0 || done} onClick=${run}>Export</button>`}
+      </div>
+    </div>
+  </div>`;
 }
 
 function RelinkBar() {
@@ -1091,7 +1226,7 @@ function App() {
     ${dialog === "captions" && html`<${CaptionsDialog} onClose=${() => setDialog(null)} />`}
     ${dialog === "export" && html`<${ExportDialog} onClose=${() => setDialog(null)} />`}
     ${dialog === "shortcuts" && html`<${ShortcutsDialog} onClose=${() => setDialog(null)} />`}
-    ${useStore((s) => s.settingsOpen) && html`<${SettingsDialog} onClose=${() => setState({ settingsOpen: false })} />`}
+    ${useStore((s) => s.settingsOpen) && html`<${SettingsDialog} start=${getState().settingsOpen} onClose=${() => setState({ settingsOpen: false })} />`}
   </div>`;
 }
 

@@ -1,13 +1,13 @@
 // Menu › Settings: a page of app-wide options, grouped like the settings of CapCut / Premiere.
 import { useState } from "react";
 import { useStore, setState, getState } from "../store.js";
-import { settings, setSetting, DEFAULTS } from "../settings.js";
+import { settings, setSetting, DEFAULTS, SKINS } from "../settings.js";
 import { setToggle } from "./timeline.js";
 import { html, Icon } from "./kit.js";
 import { UpdatesSection } from "./updates.js";
 
 const desktop = typeof window !== "undefined" ? window.cutlineDesktop : null;
-const SECTIONS = [["projects", "Projects & saving", "folder"], ["export", "Export", "upload"], ["preview", "Preview & playback", "monitor-play"],
+const SECTIONS = [["appearance", "Appearance", "palette"], ["projects", "Projects & saving", "folder"], ["export", "Export", "upload"], ["preview", "Preview & playback", "monitor-play"],
   ["timeline", "Timeline", "gallery-horizontal-end"], ["performance", "Performance", "cpu"], ["updates", "Updates", "download"]];
 
 function Row({ label, hint, children }) {
@@ -33,13 +33,27 @@ function Folder({ k, empty }) {
 
 const Check = ({ k, label }) => html`<label class="check"><input type="checkbox" checked=${!!settings()[k]} onChange=${(e) => setSetting(k, e.target.checked)} /> ${label}</label>`;
 
-export function SettingsDialog({ onClose }) {
+/** One card per skin: a little preview of its two neon colours on its background. */
+function SkinPicker() {
+  const cur = settings().skin;
+  return html`<div class="skin-grid">
+    ${SKINS.map(([id, name, a, b, bg]) => html`<button key=${id} class=${"skin-card" + (cur === id ? " on" : "")} onClick=${() => setSetting("skin", id)}>
+      <div class="skin-swatch" style=${{ background: bg, boxShadow: `inset 0 0 0 1px ${a}44` }}>
+        <i style=${{ background: a, boxShadow: `0 0 6px ${a}, 0 0 14px ${a}` }} />
+        <i style=${{ background: b, boxShadow: `0 0 6px ${b}, 0 0 14px ${b}` }} />
+      </div>
+      <span class="skin-name">${name}${cur === id && html`<${Icon} n="check" />`}</span>
+    </button>`)}
+  </div>`;
+}
+
+export function SettingsDialog({ onClose, start }) {
   useStore((s) => s.settings);
   const st = {
     q: useStore((s) => s.previewQuality), fps: useStore((s) => s.previewFps), snap: useStore((s) => s.snap), mag: useStore((s) => s.mainMagnet),
     link: useStore((s) => s.linkage), axis: useStore((s) => s.previewAxis), rem: useStore((s) => s.rememberText),
   };
-  const [sec, setSec] = useState("projects");
+  const [sec, setSec] = useState(SECTIONS.some(([k]) => k === start) ? start : "projects");
   const keep = (k, key, v) => { setState({ [k]: v }); try { localStorage.setItem(key, v === true ? "1" : v === false ? "" : v); } catch { /* ignore */ } };
   const gpuStart = useState(() => settings().gpu)[0];
   return html`<div class="modal-bg" onPointerDown=${onClose}>
@@ -50,6 +64,9 @@ export function SettingsDialog({ onClose }) {
           ${SECTIONS.map(([k, label, icon]) => html`<button key=${k} class=${sec === k ? "on" : ""} onClick=${() => setSec(k)}><${Icon} n=${icon} /> ${label}</button>`)}
         </nav>
         <div class="set-page">
+          ${sec === "appearance" && html`
+            <${Row} label="Skin" hint="Changes the colours of the whole app. Your videos and exports are not affected."><//>
+            <${SkinPicker} />`}
           ${sec === "projects" && html`
             <${Row} label="Save new projects in" hint="Untitled projects are saved here when you close Cutline, and Save asks here first.">
               <${Folder} k="projectsDir" empty="Documents › Cutline Projects" /><//>

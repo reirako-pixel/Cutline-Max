@@ -349,6 +349,7 @@ ipcMain.handle("cutline:export-begin", async (e, name) => {
   }
   const id = crypto.randomUUID();
   openExports.set(id, { fh: await fs.promises.open(target, "w"), path: target });
+  exportedPaths.add(target);
   return { id, path: target };
 });
 ipcMain.handle("cutline:export-write", async (_e, id, data, position) => {
@@ -356,6 +357,17 @@ ipcMain.handle("cutline:export-write", async (_e, id, data, position) => {
   if (!x) throw new Error("Export file is closed");
   const buf = Buffer.from(data.buffer, data.byteOffset, data.byteLength);
   await x.fh.write(buf, 0, buf.length, position);
+});
+// Files written by an export in this session: only these may get a thumbnail saved next to them.
+const exportedPaths = new Set();
+/** Saves the export's thumbnail (PNG) next to the video, as "<video name>.png" (or "(2)" etc. if taken). */
+ipcMain.handle("cutline:export-sidecar", async (_e, videoPath, data) => {
+  if (!exportedPaths.has(videoPath)) throw new Error("Not an exported video");
+  const dir = path.dirname(videoPath), base = path.basename(videoPath, path.extname(videoPath));
+  let target = path.join(dir, base + ".png");
+  for (let n = 2; fs.existsSync(target); n++) target = path.join(dir, `${base} (${n}).png`);
+  await fs.promises.writeFile(target, Buffer.from(data.buffer, data.byteOffset, data.byteLength));
+  return target;
 });
 ipcMain.handle("cutline:export-end", async (_e, id, abort) => {
   const x = openExports.get(id);

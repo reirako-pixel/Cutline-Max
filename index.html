@@ -625,7 +625,57 @@
     .el-actions { display: flex; gap: 2px; }
     .el-actions button { flex: 1; background: transparent; border: 0; padding: 3px; border-radius: 4px; color: var(--muted); }
     .el-actions button:hover { background: var(--panel2); color: var(--text); }
+    /* export window: tabs on top, thumbnail left, settings right, size + Export in the footer */
+    .modal.xdlg { width: min(800px, 96vw); max-height: 92vh; padding: 0; display: flex; flex-direction: column; overflow: hidden; }
+    .xhead { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px 4px 16px; font-size: 15px; font-weight: 600; }
+    .xtabs { align-self: center; display: flex; gap: 2px; padding: 3px; margin: 4px 0 12px; background: var(--bg); border-radius: 999px; }
+    .xtabs button { background: transparent; border: 0; border-radius: 999px; padding: 5px 22px; color: var(--muted); }
+    .xtabs button.on { background: var(--panel2); color: var(--text); box-shadow: inset 0 0 0 1px var(--line); }
+    .xbody { display: grid; grid-template-columns: 240px minmax(0, 1fr); margin: 0 12px; background: var(--bg); border-radius: 8px; min-height: 0; overflow: auto; }
+    .xleft { padding: 18px 20px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
+    .xlabel { font-weight: 600; }
+    .xthumb { width: 100%; max-height: 260px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); display: grid; place-items: center; overflow: hidden; color: var(--muted); }
+    .xthumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .xleft .wide { margin-top: 0; }
+    .xpick { display: grid; gap: 6px; }
+    .xright { padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+    .xright hr { border: 0; border-top: 1px solid var(--line); margin: 2px 0; width: 100%; }
+    .xfield { display: grid; gap: 6px; min-width: 0; }
+    .xfield > span { font-size: 13px; }
+    .xfield input, .xfield select { width: 100%; padding: 7px 10px; }
+    .xpath { display: flex; align-items: center; gap: 2px; background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 3px 4px 3px 10px; min-width: 0; }
+    .xpath > span { flex: 1; min-width: 0; }
+    .xpreset { max-width: 260px; }
+    .xbox { background: var(--panel); border-radius: 8px; padding: 14px; display: grid; gap: 12px; }
+    .xgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+    .xspan { grid-column: 1 / -1; }
+    .xadvanced { padding-top: 12px; border-top: 1px solid var(--line); }
+    .xsummary { display: flex; align-items: center; gap: 0; color: var(--muted); font-size: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
+    .xsummary > span + span { border-left: 1px solid var(--line); margin-left: 8px; padding-left: 8px; }
+    .xadv { margin-left: auto; background: transparent; border: 0; color: var(--accent); font-weight: 600; padding: 2px 4px; display: inline-flex; gap: 4px; align-items: center; }
+    .xswitches { display: grid; gap: 12px; padding-top: 2px; }
+    .xswitch { display: flex; align-items: center; gap: 12px; cursor: pointer; width: fit-content; }
+    .xswitch.off { opacity: .5; cursor: default; }
+    .xswitch input { position: absolute; opacity: 0; pointer-events: none; }
+    .xswitch i { width: 30px; height: 16px; border-radius: 999px; border: 1.5px solid var(--muted); position: relative; flex: none; transition: background .15s, border-color .15s; }
+    .xswitch i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 9px; height: 9px; border-radius: 50%; background: var(--muted); transition: transform .15s, background .15s; }
+    .xswitch input:checked + i { background: var(--accent); border-color: var(--accent); }
+    .xswitch input:checked + i::after { transform: translateX(14px); background: var(--accent-ink); }
+    .xswitch input:focus-visible + i { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .xdone { display: grid; gap: 8px; }
+    .xdone .wide { margin-top: 0; }
+    .xfoot { display: flex; align-items: center; justify-content: flex-end; gap: 28px; padding: 12px 16px 14px; }
+    .xfoot b { font-weight: 500; }
+    .xgo { min-width: 76px; border-radius: 6px; padding: 6px 16px; }
+    .xprogress { flex: 1; display: flex; align-items: center; gap: 10px; }
+    .xprogress .bar { flex: 1; margin: 0; }
+    @media (max-width: 640px) { .xbody { grid-template-columns: 1fr; } .xleft { border-right: 0; border-bottom: 1px solid var(--line); } .xgrid { grid-template-columns: 1fr; } }
   </style>
+  <link rel="stylesheet" href="src/skins.css" />
+  <script>
+    // Put the saved skin on the page before anything draws, so a neon skin never flashes in as Classic.
+    try { var sk = JSON.parse(localStorage.getItem("cutline.settings") || "{}").skin; if (sk && sk !== "classic") document.documentElement.dataset.skin = sk; } catch (e) {}
+  </script>
 </head>
 <body>
   <div id="root"></div>

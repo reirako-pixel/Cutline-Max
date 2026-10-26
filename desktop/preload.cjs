@@ -31,6 +31,8 @@ contextBridge.exposeInMainWorld("cutlineDesktop", {
   exportBegin: (name) => ipcRenderer.invoke("cutline:export-begin", name),
   exportWrite: (id, data, position) => ipcRenderer.invoke("cutline:export-write", id, data, position),
   exportEnd: (id, abort) => ipcRenderer.invoke("cutline:export-end", id, abort),
+  /** Saves a PNG next to a video this session exported; returns its path. */
+  exportSidecar: (videoPath, data) => ipcRenderer.invoke("cutline:export-sidecar", videoPath, data),
   onSavedFile: (cb) => ipcRenderer.on("cutline:saved-file", (_e, p) => cb(p)),
   /** Recent projects (newest first), with `exists` for each file. */
   recentList: () => ipcRenderer.invoke("cutline:recent-list"),
