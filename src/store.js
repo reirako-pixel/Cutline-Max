@@ -150,8 +150,9 @@ export const usePanelTime = (hz = 8) => useStore((s) => (s.playing ? Math.floor(
 
 /**
  * Linkage (timeline toggle, on by default): texts, layers, audio and effects sit on a main-track clip and
- * move with it when that clip moves (clips before it deleted, trimmed, reordered…). Items lying entirely
- * inside a deleted clip go with it. Items the edit itself moved are left alone.
+ * move with it when that clip moves (clips before it deleted, trimmed, reordered…). Items on a clip that is
+ * deleted stay where they are (deleting a clip never deletes the texts, effects or layers on it).
+ * Items the edit itself moved are left alone.
  */
 function linkToMain(prev, next) {
   if (state.linkage === false || !prev?.main || !next?.main) return;
@@ -167,7 +168,7 @@ function linkToMain(prev, next) {
       const host = before.find((s) => o.start >= s.start - 1e-6 && o.start < s.start + s.dur - 1e-6);
       if (!host) return true;
       const now = after.get(host.id);
-      if (!now) return !(o.start + o.dur <= host.start + host.dur + 1e-3); // its clip was deleted
+      if (!now) return true; // its clip was deleted: keep the item where it is
       const d = now.start - host.start;
       if (Math.abs(d) < 1e-9) return true;
       const shift = Math.max(d, -x.start);
@@ -183,10 +184,19 @@ function linkToMain(prev, next) {
  * (added to the gap before the next clip) so nothing after them moves.
  */
 export function removeMain(p, ids, keepGap = state.mainMagnet === false) {
-  let carry = 0;
+  let carry = 0, lastKept = null, pending = null;
   p.main = p.main.filter((s) => {
-    if (ids.has(s.id)) { if (keepGap) carry += (s.gap || 0) + s.dur; return false; }
+    if (ids.has(s.id)) {
+      if (keepGap) carry += (s.gap || 0) + s.dur;
+      // A clip's transition sits on its cut to the next clip. When it's deleted, that transition moves to the
+      // cut that's left (previous clip → next clip), unless that cut already has its own.
+      if (s.transition && lastKept && !lastKept.transition) pending ??= s.transition;
+      return false;
+    }
     if (carry) { s.gap = (s.gap || 0) + carry; carry = 0; }
+    if (pending && !s.gap) lastKept.transition = pending;
+    pending = null;
+    lastKept = s;
     return true;
   });
 }
