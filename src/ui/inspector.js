@@ -5,7 +5,7 @@ import { clipSpeed, clipTransform, BLEND_MODES, ANIMATIONS, TRANSITIONS, itemBou
 import {
   deleteSelection, rippleDelete, copySelection, duplicateSelection, setClipSpeed, SPEED_PRESETS, freezeFrame,
   mergeClips, detachAudio, applyFilter, toast, setAnimatable, toggleKeyframe, localTime, mirrorSelection,
-  setTextSound, soundToAll, toggleAllKeyframes, allKeyedHere,
+  setTextSound, soundToAll, toggleAllKeyframes, allKeyedHere, matchAudioLength, audioUnder,
 } from "../actions.js";
 import { ADJUST, FILTERS, EFFECTS, EFFECT_CATEGORIES } from "../fx.js";
 import { VOICE_EFFECTS } from "../audiofx.js";
@@ -417,6 +417,7 @@ function VisualInspector({ kind, item, project }) {
         <${BlendSection} kind=${kind} item=${item} />
         <${LookSection} kind=${kind} item=${item} />
         <${SourceSection} kind=${kind} item=${item} media=${media} />
+        ${media?.kind === "image" && html`<${MatchAudioButton} kind=${kind} item=${item} />`}
         <div class="action-row">
           ${media?.kind === "video" && html`<button onClick=${() => freezeFrame()} title="Hold the frame under the playhead for 3 seconds (F)"><${Icon} n="snowflake" /> Freeze</button>`}
           ${kind === "main" && html`<button onClick=${mergeClips} title="Select neighbouring pieces of one clip, then merge"><${Icon} n="combine" /> Merge</button>`}
@@ -619,8 +620,22 @@ function ShapeInspector({ t }) {
     ${tab === "shape" && html`<${ShapeFields} t=${t} /><${TransformSection} kind="text" id=${t.id} />`}
     ${tab === "animate" && html`<${AnimateSection} kind="text" item=${t} />`}
     <${SettingsCopyBar} />
+    <${MatchAudioButton} kind="text" item=${t} />
     <button class="danger wide" onClick=${deleteSelection}><${Icon} n="trash-2" /> Delete</button>
   <//>`;
+}
+
+/** "Match audio length": the text / image lasts exactly as long as the music or voice-over under it. */
+function MatchAudioButton({ kind, item }) {
+  const project = useStore((s) => s.project);
+  const a = audioUnder(project, kind, item);
+  const name = a && (project.media[a.mediaId]?.name || "audio");
+  const same = a && Math.abs(a.dur - item.dur) < 0.01 && (kind === "main" || Math.abs(a.start - item.start) < 0.01);
+  const title = !a ? "Put this over a music or voice-over clip on the timeline to match its length"
+    : kind === "main" ? `Make this image last ${a.dur.toFixed(2)} s, as long as ${name}`
+    : `Start with ${name} and last as long as it (${a.dur.toFixed(2)} s)`;
+  return html`<button class="wide match-audio" disabled=${!a || same} onClick=${() => matchAudioLength(kind, item.id)} title=${title}>
+    <${Icon} n="audio-lines" /> ${same ? "Matches the audio length" : "Match audio length"}</button>`;
 }
 
 /** Copy this item's settings / paste copied settings onto the selection. */
@@ -689,6 +704,7 @@ function TextInspectorBody({ t }) {
     ${tab === "animate" && html`<${AnimateSection} kind="text" item=${t} textOnly
       onAnim=${allCaptions ? setAnimOn(new Set(getState().project.texts.filter((x) => x.caption).map((x) => x.id))) : undefined}
       note=${allCaptions && html`<p class="muted">Changes apply to all ${captionCount} captions.</p>`} />`}
+    <${MatchAudioButton} kind="text" item=${t} />
     <button class="danger wide" onClick=${deleteSelection}><${Icon} n="trash-2" /> Delete</button>
   <//>`;
 }

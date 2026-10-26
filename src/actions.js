@@ -498,6 +498,54 @@ export function soundToAll(fromId, onlyCaptions = false) {
   toast(`Same sound on ${n} more text${n === 1 ? "" : "s"}`);
 }
 
+/**
+ * The audio clip (music, voice-over, TTS) a text or image goes with: the one playing where the item starts,
+ * else the one overlapping it the most. Null when no audio touches the item.
+ */
+export function audioUnder(project, kind, item) {
+  if (!item || !project.audio?.length) return null;
+  const start = kind === "main" ? layoutMain(project).find((s) => s.id === item.id)?.start ?? 0 : item.start;
+  const end = start + item.dur;
+  const eps = 1e-3;
+  const covering = project.audio.filter((a) => a.start <= start + eps && a.start + a.dur > start + eps);
+  if (covering.length) return covering.sort((a, b) => Math.abs(a.start - start) - Math.abs(b.start - start))[0];
+  let best = null, bestOverlap = 0;
+  for (const a of project.audio) {
+    const overlap = Math.min(end, a.start + a.dur) - Math.max(start, a.start);
+    if (overlap > bestOverlap + eps) { best = a; bestOverlap = overlap; }
+  }
+  return best;
+}
+
+/**
+ * Makes a text (or shape) or image last exactly as long as the audio under it. Texts and image layers also
+ * move to start with the audio; an image on the main track keeps its place and only changes length.
+ */
+export function matchAudioLength(kind, id) {
+  const { project } = getState();
+  const item = findItem(project, kind, id);
+  if (!item) return;
+  const a = audioUnder(project, kind, item);
+  if (!a) return toast("No audio under this item: move it over a music or voice-over clip first", 2600);
+  const name = project.media[a.mediaId]?.name || "the audio";
+  edit((p) => {
+    const it = findItem(p, kind, id);
+    if (!it) return;
+    if (kind === "main") { it.dur = a.dur; return; }
+    const shift = a.start - it.start;
+    it.start = a.start;
+    it.dur = a.dur;
+    if (it.words && shift) it.words = it.words.map((w) => ({ ...w, t0: w.t0 + shift, t1: w.t1 + shift }));
+    // A layer that now runs into another one on its track moves to the first free track.
+    if (kind === "overlay") {
+      const t = it.track ?? 0;
+      const clash = p.overlays.some((o) => o.id !== it.id && (o.track ?? 0) === t && o.start < it.start + it.dur - 1e-3 && o.start + o.dur > it.start + 1e-3);
+      if (clash) it.track = freeTrack(p.overlays, it.start, it.dur, it.id);
+    }
+  });
+  toast(`Now ${a.dur.toFixed(2)} s, the length of ${name}`, 2200);
+}
+
 /** Mirrors the selected clips/layers left-right (toggle). */
 export function mirrorSelection() {
   const targets = visualTargets();

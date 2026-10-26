@@ -105,6 +105,20 @@ const download = (blob, name) => {
   setTimeout(() => URL.revokeObjectURL(a.href), 10000);
 };
 
+/** Saves the frame under the playhead as a full-resolution PNG (player snapshot button and Menu). */
+let snapshotBusy = false;
+async function snapshotFrame() {
+  if (snapshotBusy) return;
+  snapshotBusy = true;
+  if (getState().playing) pause();
+  const t = getState().time;
+  try {
+    download(await exportFrame(getState().project, t), `${projectName()} ${t.toFixed(2)}s.png`);
+    toast(`Snapshot saved (${fmt(t)})`);
+  } catch (err) { toast(err.message); }
+  finally { snapshotBusy = false; }
+}
+
 // ---------------- resizable panels ----------------
 
 /** Widths of the library (left) and inspector (right) columns: dragged by the user, remembered. */
@@ -153,10 +167,7 @@ function MainMenu({ onShortcuts, onExport }) {
     try { toast("Mixing audio…"); download(await exportWav(rootProject()), projectName() + ".wav"); }
     catch (err) { toast(err.message); }
   };
-  const snapshot = async () => {
-    try { download(await exportFrame(getState().project, getState().time), `${projectName()} ${getState().time.toFixed(2)}s.png`); }
-    catch (err) { toast(err.message); }
-  };
+  const snapshot = snapshotFrame;
   return html`<div class="menu">
     <button class="menu-btn" onClick=${() => setOpen(!open)}>Menu <${Icon} n="chevron-down" /></button>
     <input ref=${input} type="file" accept=".cutline,application/json" hidden onChange=${(e) => { const f = e.target.files[0]; e.target.value = ""; if (f) openProject(f); }} />
@@ -419,6 +430,7 @@ function Player() {
         <button class="ibtn" onClick=${() => seek(0)} title="Go to start (Home)"><${Icon} n="skip-back" /></button>
         <button class="ibtn play" onClick=${togglePlay} title="Play/pause (Space)"><${Icon} n=${playing ? "pause" : "play"} size=${18} /></button>
         <button class="ibtn" onClick=${() => seek(duration)} title="Go to end (End)"><${Icon} n="skip-forward" /></button>
+        <button class="ibtn" onClick=${snapshotFrame} disabled=${duration <= 0} title="Snapshot: save this frame as a full-size PNG"><${Icon} n="camera" /></button>
       </span>
       <span class="tright">
         <select class="pq" value=${quality} title="Preview quality: lower is smoother on slower computers (export is always full quality)"
