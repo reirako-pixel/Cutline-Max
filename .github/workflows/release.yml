@@ -1,4 +1,4 @@
-# Builds the installers on GitHub's Windows and macOS machines and attaches them to a Release.
+# Builds the Windows installer on GitHub's Windows machines and attaches them to a Release.
 # Runs when a version tag (v1.2.3) is pushed, or by hand from the Actions tab.
 name: Build installers
 
@@ -19,9 +19,6 @@ jobs:
           - os: windows-latest
             script: dist:win
             files: dist/*.exe
-          - os: macos-latest
-            script: dist:mac
-            files: dist/*.dmg
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -55,10 +52,9 @@ jobs:
           | Your computer | File |
           |---|---|
           | **Windows 10 / 11** | `Cutline-Setup-….exe` |
-          | **Mac** (Apple silicon and Intel) | `Cutline-…-mac.dmg` |
 
-          Already have Cutline? It updates itself: Menu › Settings › Updates (Windows).
-          Installation steps are in the [README](https://github.com/Mehal45/Cutline#install).
+          Already have this version of Cutline? It updates itself: Menu › Settings › Updates.
+          Installation steps are in the [README](https://github.com/reirako-pixel/Cutline-Max#install).
           EOF
       - uses: actions/download-artifact@v4
         with:

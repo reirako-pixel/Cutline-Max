@@ -8,7 +8,8 @@ const crypto = require("node:crypto");
 const { Readable } = require("node:stream");
 const { setupUpdates } = require("./updater.cjs");
 
-setupUpdates({ repo: "Mehal45/Cutline", assets: { win32: /^Cutline-Setup-.*\.exe$/i, darwin: /\.dmg$/i } });
+// Updates come from this customised copy's own releases, never from the original project.
+setupUpdates({ repo: "reirako-pixel/Cutline-Max", assets: { win32: /^Cutline-Setup-.*\.exe$/i, darwin: /\.dmg$/i } });
 
 const root = path.join(__dirname, "..");
 const token = crypto.randomBytes(16).toString("hex"); // guards /local-file against other pages on this PC
