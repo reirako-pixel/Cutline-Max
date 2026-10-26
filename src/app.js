@@ -10,6 +10,7 @@ import {
   clock, play, pause, togglePlay, seek, toast, importFiles, addMediaToTimeline, splitAtPlayhead, deleteSelection,
   rippleDelete, selectAll, copySettings, pasteSettings, copySelection, cutSelection, paste, duplicateSelection, applyTransition, freezeFrame,
   localTime, splitAllAtPlayhead, toggleMute, zoomTimeline, openPreview, closePreview, zoomToFit, trimToPlayhead,
+  removeMediaFromLibrary, mediaUses,
 } from "./actions.js";
 import { SourceViewer, toggleSource, stepSource, markSource, addFromSource } from "./ui/source.js";
 import { hasKeys, setKey, setStatic } from "./keyframes.js";
@@ -313,8 +314,46 @@ function MediaPoster({ m }) {
 }
 const posters = new Map(); // key -> data URL (this session)
 
+/** Right-click menu for a library file (uses the timeline's menu). */
+function mediaMenu(e, m) {
+  e.preventDefault();
+  const cur = getState().libSel || [];
+  const ids = cur.includes(m.id) ? cur : [m.id];
+  if (!cur.includes(m.id)) setState({ libSel: [m.id] });
+  setState({ focusArea: "library" });
+  const many = ids.length > 1;
+  const items = many ? [] : [
+    ...(!m.missing && m.kind !== "compound" ? [{ label: "Preview", icon: "eye", onClick: () => openPreview(m.id) }] : []),
+    ...(!m.missing ? [{ label: m.kind === "audio" ? "Add to an audio track" : "Add to the timeline", icon: "plus", onClick: () => addMediaToTimeline(m) }] : []),
+    ...(!m.missing && m.kind !== "audio" ? [{ label: "Add as a layer (picture-in-picture)", icon: "layers", onClick: () => addMediaToTimeline(m, "overlay") }] : []),
+    ...(desktop && m.path ? [{ label: "Show in folder", icon: "folder-open", onClick: () => desktop.showInFolder(m.path) }] : []),
+  ];
+  const used = ids.reduce((n, id) => n + mediaUses(getState().project, id).timeline, 0);
+  if (items.length) items.push("-");
+  items.push({ label: (many ? `Remove ${ids.length} files from library` : "Remove from library") + (used ? ` (and ${used} clip${used === 1 ? "" : "s"})` : ""),
+    icon: "trash-2", onClick: () => removeMediaFromLibrary(ids) });
+  setState({ ctxMenu: { x: e.clientX, y: e.clientY, items } });
+}
+
+/** Asks before removing files that are still used on the timeline. */
+function RemoveMediaDialog() {
+  const c = useStore((s) => s.confirmRemove);
+  if (!c) return null;
+  const close = () => setState({ confirmRemove: null });
+  const what = c.names.length === 1 ? `“${c.names[0]}”` : `${c.names.length} files`;
+  return html`<${Modal} title="Remove from library" onClose=${close}>
+    <p>${what} ${c.names.length === 1 ? "is" : "are"} used <b>${c.used} time${c.used === 1 ? "" : "s"}</b> on the timeline. Removing ${c.names.length === 1 ? "it" : "them"} from the library also removes ${c.used === 1 ? "that clip" : "those clips"}.</p>
+    <p class="muted">Your file${c.names.length === 1 ? "" : "s"} on disk ${c.names.length === 1 ? "stays" : "stay"} where ${c.names.length === 1 ? "it is" : "they are"}. Ctrl+Z undoes this.</p>
+    <div class="row" style=${{ justifyContent: "flex-end", marginTop: "12px" }}>
+      <button onClick=${close}>Cancel</button>
+      <button class="primary danger-fill" autoFocus onClick=${() => removeMediaFromLibrary(c.ids, { confirmed: true })}>Remove from library and timeline</button>
+    </div>
+  <//>`;
+}
+
 function MediaTab() {
   const media = useStore((s) => s.project.media);
+  const libSel = useStore((s) => s.libSel) || [];
   const previewing = useStore((s) => s.preview?.mediaId);
   const proxies = useStore((s) => s.proxies);
   const scans = useStore((s) => s.scans);
@@ -330,11 +369,16 @@ function MediaTab() {
       onChange=${(e) => { importFiles([...e.target.files]); e.target.value = ""; }} />
     ${!items.length && html`<div class="drop-hint"><${Icon} n="upload" size=${28} /><span>Drag and drop videos, photos and audio here</span></div>`}
     <div class="media-grid">
-      ${items.map((m) => html`<div class=${"mcard" + (m.missing ? " missing" : "") + (previewing === m.id ? " active" : "")} key=${m.id}
-          title=${m.missing ? "File not found — use Menu › Open again or relink" : `${m.name}\nClick to preview · double-click to add · drag onto the timeline`}
+      ${items.map((m) => html`<div class=${"mcard" + (m.missing ? " missing" : "") + (previewing === m.id ? " active" : "") + (libSel.includes(m.id) ? " sel" : "")} key=${m.id}
+          title=${m.missing ? "File not found — use Menu › Open again or relink · Delete removes it from the library" : `${m.name}\nClick to preview · double-click to add · drag onto the timeline · right-click for more · Delete removes it from the library`}
           draggable=${!m.missing}
           onDragStart=${(e) => { e.dataTransfer.setData("text/x-cutline-media", m.id); e.dataTransfer.effectAllowed = "copy"; }}
-          onClick=${() => !m.missing && m.kind !== "compound" && openPreview(m.id)}
+          onContextMenu=${(e) => mediaMenu(e, m)}
+          onClick=${(e) => {
+            if (e.ctrlKey || e.metaKey) { setState({ libSel: libSel.includes(m.id) ? libSel.filter((x) => x !== m.id) : [...libSel, m.id] }); return; }
+            setState({ libSel: [m.id] });
+            if (!m.missing && m.kind !== "compound") openPreview(m.id);
+          }}
           onDoubleClick=${() => !m.missing && addMediaToTimeline(m)}>
         <div class="mthumb">
           ${m.kind === "image" ? html`<img src=${m.url} draggable="false" />`
@@ -699,6 +743,7 @@ const SHORTCUTS = [
   ["G", "Show / hide the preview axis and safe-area guides"],
   ["Delete / Backspace", "Delete selection"],
   ["Shift+Delete", "Ripple delete (close the gap)"],
+  ["Delete (after clicking in the Library)", "Remove the selected files from the library (Ctrl+click selects several)"],
   ["F", "Freeze frame"],
   ["N", "Magnetic snapping on/off"],
   ["Ctrl+S / Ctrl+Shift+S", "Save / save as"],
@@ -1134,6 +1179,13 @@ function useShortcuts(openShortcuts, openExport) {
       if (t.tagName === "INPUT" && !mod && /^(arrow|home$|end$|page)/.test(key)) return; // the slider's own keys
       const fps = getState().project.fps;
       const run = (fn) => { e.preventDefault(); fn(); };
+      // The "Remove from library?" question: Enter confirms, Escape cancels, nothing else reacts.
+      const ask = getState().confirmRemove;
+      if (ask) {
+        if (key === "enter") return run(() => removeMediaFromLibrary(ask.ids, { confirmed: true }));
+        if (key === "escape") return run(() => setState({ confirmRemove: null }));
+        return;
+      }
       // While a library item is previewing, playback keys drive the preview.
       if (getState().preview && !mod) {
         // (Space is handled by onSpace below.)
@@ -1179,6 +1231,9 @@ function useShortcuts(openShortcuts, openExport) {
       if (key === "w") return run(() => trimToPlayhead("right"));
       if (key === "v" || key === "a") return run(() => setState({ tool: null }));
       if (key === "n") return run(() => { setToggle("snap", !getState().snap); toast(getState().snap ? "Snapping on" : "Snapping off"); });
+      // After clicking in the Library, Delete removes the selected files from the library.
+      if ((key === "delete" || key === "backspace") && getState().focusArea === "library" && getState().libSel?.length) return run(() => removeMediaFromLibrary(getState().libSel));
+      if (key === "escape" && getState().focusArea === "library" && getState().libSel?.length) return run(() => setState({ libSel: [] }));
       if ((key === "delete" || key === "backspace") && e.shiftKey) return run(rippleDelete);
       if (key === "delete" || key === "backspace") return run(deleteSelection);
       if (key === "escape") return run(() => { if (getState().tool) setState({ tool: null }); else select([]); });
@@ -1202,7 +1257,8 @@ function useShortcuts(openShortcuts, openExport) {
     // keyboard shortcuts work on what you just clicked.
     const onDown = (e) => {
       // Where you last clicked decides what the arrow keys move: objects (player) or the playhead (timeline).
-      const area = e.target.closest?.(".stage") ? "preview" : e.target.closest?.(".timeline, .panel.left, .transport") ? "timeline" : null;
+      const area = e.target.closest?.(".stage") ? "preview" : e.target.closest?.(".media-grid") ? "library"
+        : e.target.closest?.(".timeline, .panel.left, .transport") ? "timeline" : null;
       if (area && area !== getState().focusArea) setState({ focusArea: area });
       const a = document.activeElement;
       if (a && a !== document.body && a.matches?.("input, textarea, select") && !e.target.closest?.("input, textarea, select, label")) a.blur();
@@ -1281,6 +1337,7 @@ function App() {
       onChange=${(e) => { importFiles([...e.target.files]); e.target.value = ""; }} />
     ${dialog === "captions" && html`<${CaptionsDialog} onClose=${() => setDialog(null)} />`}
     ${dialog === "export" && html`<${ExportDialog} onClose=${() => setDialog(null)} />`}
+    <${RemoveMediaDialog} />
     ${dialog === "shortcuts" && html`<${ShortcutsDialog} onClose=${() => setDialog(null)} />`}
     ${useStore((s) => s.settingsOpen) && html`<${SettingsDialog} start=${getState().settingsOpen} onClose=${() => setState({ settingsOpen: false })} />`}
   </div>`;

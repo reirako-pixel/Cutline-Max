@@ -604,6 +604,46 @@ export function deleteSelection() {
   setState({ selection: [] });
 }
 
+// ---------------- library ----------------
+
+/** Where a library file is used: { timeline: number of clips / text sounds, compounds: names of compound clips using it }. */
+export function mediaUses(project, mediaId) {
+  const count = (seq) => [...(seq.main || []), ...(seq.overlays || []), ...(seq.audio || [])].filter((x) => x.mediaId === mediaId).length
+    + (seq.texts || []).filter((t) => t.sound?.mediaId === mediaId).length;
+  const compounds = Object.values(project.media).filter((m) => m.id !== mediaId && m.sequence && count(m.sequence) > 0).map((m) => m.name);
+  return { timeline: count(project), compounds };
+}
+
+/**
+ * Removes files from the library (never from your disk). Clips using them are removed too; when there are
+ * any, this first asks (sets `confirmRemove` for the dialog) unless `confirmed`. Undo brings everything back.
+ */
+export function removeMediaFromLibrary(ids, { confirmed = false } = {}) {
+  const { project, compoundOpen } = getState();
+  ids = ids.filter((id) => project.media[id]);
+  if (!ids.length) return;
+  if (compoundOpen?.length) return toast("Close the compound clip first (top of the timeline), then remove files from the library", 3500);
+  const names = ids.map((id) => project.media[id].name);
+  const inCompound = ids.map((id) => [project.media[id].name, mediaUses(project, id).compounds]).find(([, c]) => c.length);
+  if (inCompound) return toast(`“${inCompound[0]}” is used inside the compound clip “${inCompound[1][0]}”. Remove it there first.`, 4000);
+  const used = ids.reduce((n, id) => n + mediaUses(project, id).timeline, 0);
+  if (used && !confirmed) return setState({ confirmRemove: { ids, names, used } });
+  const gone = new Set(ids);
+  if (gone.has(getState().preview?.mediaId)) closePreview();
+  edit((p) => {
+    removeMain(p, new Set(p.main.filter((s) => gone.has(s.mediaId)).map((s) => s.id)));
+    p.overlays = p.overlays.filter((x) => !gone.has(x.mediaId));
+    p.audio = p.audio.filter((x) => !gone.has(x.mediaId));
+    for (const t of p.texts) if (gone.has(t.sound?.mediaId)) delete t.sound;
+    p.media = { ...p.media };
+    for (const id of gone) delete p.media[id];
+    compactTracks(p);
+  });
+  const { selection } = getState();
+  setState({ confirmRemove: null, libSel: [], selection: selection.filter((s) => findItem(getState().project, s.kind, s.id)) });
+  toast(`Removed ${names.length === 1 ? `“${names[0]}”` : `${names.length} files`} from the library${used ? ` and ${used} clip${used === 1 ? "" : "s"} from the timeline` : ""} · Ctrl+Z to undo`, 3500);
+}
+
 /**
  * Ripple delete: removes the selection and closes the gap it leaves on its own track.
  * (The main track always closes gaps; this extends that to layers, audio, texts and effects.)

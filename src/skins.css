@@ -139,3 +139,7 @@ html[data-skin] * { scrollbar-color: color-mix(in srgb, var(--accent) 45%, trans
 .skin-swatch i:nth-child(1) { top: 22px; }
 .skin-swatch i:nth-child(2) { top: 36px; right: 40px; }
 .skin-name { font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+
+/* A destructive confirm stays red in every skin; right-click menus follow the skin. */
+html[data-skin] .primary.danger-fill { background: var(--danger); color: #fff; box-shadow: 0 0 14px -2px var(--danger); }
+html[data-skin] .ctxmenu { background: var(--panel2); border-color: var(--edge); box-shadow: 0 0 24px -8px var(--glow), 0 12px 32px rgba(0, 0, 0, .5); }

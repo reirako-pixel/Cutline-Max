@@ -473,6 +473,9 @@
     .mcard[draggable=true] { cursor: grab; }
     .mthumb { position: relative; aspect-ratio: 16 / 10; background: #000; border-radius: 6px; overflow: hidden; border: 2px solid transparent; }
     .mcard.active .mthumb, .mcard:hover .mthumb { border-color: var(--accent); }
+    .mcard.sel .mthumb { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
+    .mcard.sel .mname { color: var(--text); }
+    .primary.danger-fill { background: var(--danger); border-color: var(--danger); color: #fff; }
     .mthumb img, .mthumb video { width: 100%; height: 100%; object-fit: cover; display: block; }
     .mthumb .audio-thumb { width: 100%; height: 100%; display: grid; place-items: center; background: #1d4a48; color: #9ff; border-radius: 0; }
     .mdur { position: absolute; right: 4px; bottom: 4px; background: rgba(0,0,0,.65); padding: 0 4px; border-radius: 3px; font-size: 10px; }
