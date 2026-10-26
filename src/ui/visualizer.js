@@ -10,8 +10,10 @@ import { html, Icon, Field, Section, Slider } from "./kit.js";
 import { setting } from "../settings.js";
 
 const pct = (v) => `${Math.round(v * 100)}%`;
-const BOTTOM_STYLES = new Set(["bars", "dots", "hills"]);
-const ROUND_STYLES = new Set(["circle", "ring"]);
+const BOTTOM_STYLES = new Set(["bars", "dots", "hills", "led"]);
+const ROUND_STYLES = new Set(["circle", "ring", "halo", "flame", "badge", "hud"]);
+const BAR_STYLES = new Set(["bars", "mirror", "dots", "led"]);
+const LINE_STYLES = new Set(["wave", "hills", "sparkle"]);
 
 /**
  * Adds a visualizer at the playhead. It lasts as long as the music under the playhead (or to the end of
@@ -69,7 +71,8 @@ const presetViz = new Map(VIZ_PRESETS.map((p) => [p[0], newViz(p[1], p[2], p[3],
 /** Library › Visualizer: click a look to add it at the playhead. */
 export function VisualizerTab({ part }) {
   const hasSound = useStore((s) => (s.project.audio || []).length > 0 || s.project.main.some((m) => s.project.media[m.mediaId]?.kind === "video"));
-  const list = part === "all" ? VIZ_PRESETS : VIZ_PRESETS.filter((p) => (part === "round" ? ROUND_STYLES.has(p[1]) : part === "lines" ? ["wave", "hills"].includes(p[1]) : part === "bars" ? ["bars", "mirror", "dots"].includes(p[1]) : p[1] === "stardust"));
+  const list = part === "all" ? VIZ_PRESETS : VIZ_PRESETS.filter((p) => (part === "round" ? ROUND_STYLES.has(p[1]) : part === "lines" ? LINE_STYLES.has(p[1])
+    : part === "bars" ? BAR_STYLES.has(p[1]) : p[1] === "stardust"));
   return html`<div>
     <p class="muted small">Click a visualizer to add it at the playhead. It moves with the music and every other sound in your project, and lasts as long as the song under the playhead.</p>
     ${!hasSound && html`<p class="warn small">Add music or a video with sound first, or the visualizer stays still.</p>`}
@@ -110,20 +113,28 @@ export function VizFields({ t }) {
         <${Field} label="Colour 1"><input type="color" value=${v.colorA} onChange=${(e) => set((z) => (z.colorA = e.target.value))} /><//>
         <${Field} label="Colour 2"><input type="color" value=${v.colorB} onChange=${(e) => set((z) => (z.colorB = e.target.value))} /><//>
       </div>
-      <button class="mini" onClick=${() => set((z) => ([z.colorA, z.colorB] = [z.colorB, z.colorA]))}><${Icon} n="arrow-left-right" /> Swap colours</button>
+      <div class="row">
+        <button class="mini" onClick=${() => set((z) => ([z.colorA, z.colorB] = [z.colorB, z.colorA]))}><${Icon} n="arrow-left-right" /> Swap colours</button>
+        <label class="check"><input type="checkbox" checked=${!!v.rainbow} onChange=${(e) => set((z) => (z.rainbow = e.target.checked))} /> Rainbow</label>
+      </div>
       ${num("glow", "Glow", 0, 1, 0.01, pct)}
     <//>
     <${Section} title="Movement">
       ${num("sens", "Sensitivity", 0.3, 2.5, 0.05, pct)}
       ${num("smooth", "Smoothness", 0, 1, 0.05, pct)}
       ${(ROUND_STYLES.has(v.style) || v.style === "stardust") && num("spin", "Spin (°/s)", -90, 90, 1, (x) => `${Math.round(x)}°`)}
-      ${["bars", "dots"].includes(v.style) && html`<label class="check"><input type="checkbox" checked=${!!v.mirror} onChange=${(e) => set((z) => (z.mirror = e.target.checked))} />
+      ${v.style === "led" && html`<label class="check"><input type="checkbox" checked=${!!v.reflect} onChange=${(e) => set((z) => (z.reflect = e.target.checked))} />
+        Reflection underneath</label>`}
+      ${v.style === "flame" && html`<label class="check"><input type="checkbox" checked=${!!v.clearCentre} onChange=${(e) => set((z) => (z.clearCentre = e.target.checked))} />
+        See-through centre (show the picture inside the ring)</label>`}
+      ${["bars", "dots", "led"].includes(v.style) && html`<label class="check"><input type="checkbox" checked=${!!v.mirror} onChange=${(e) => set((z) => (z.mirror = e.target.checked))} />
         Bass in the middle (mirrored)</label>`}
     <//>
     <${Section} title="Shape">
-      ${counted && num("count", v.style === "stardust" ? "Specks" : v.style === "hills" || v.style === "ring" ? "Points" : "Bars", 8, v.style === "stardust" ? 400 : 160, 1, (x) => String(Math.round(x)))}
-      ${num("thick", v.style === "wave" || v.style === "hills" || v.style === "ring" ? "Line width" : v.style === "stardust" ? "Speck size" : "Bar width", 0, 1, 0.01, pct)}
-      ${ROUND_STYLES.has(v.style) && num("radius", "Inner circle", 0.15, 0.9, 0.01, pct)}
+      ${counted && num("count", v.style === "stardust" || v.style === "sparkle" ? "Specks" : ["hills", "ring", "flame"].includes(v.style) ? "Points"
+        : ["halo", "badge"].includes(v.style) ? "Spikes" : v.style === "hud" ? "Ticks" : "Bars", 8, v.style === "stardust" || v.style === "sparkle" ? 600 : 240, 1, (x) => String(Math.round(x)))}
+      ${num("thick", ["wave", "hills", "ring", "sparkle", "hud", "halo"].includes(v.style) ? "Line width" : v.style === "stardust" ? "Speck size" : v.style === "flame" || v.style === "badge" ? "Spike width" : "Bar width", 0, 1, 0.01, pct)}
+      ${ROUND_STYLES.has(v.style) && num("radius", v.style === "badge" ? "Badge size" : "Inner circle", 0.15, 0.9, 0.01, pct)}
       ${num("w", "Width", 80, 3840, 10, (x) => `${Math.round(x)} px`)}
       ${!ROUND_STYLES.has(v.style) && num("h", "Height", 40, 2160, 10, (x) => `${Math.round(x)} px`)}
     <//>
