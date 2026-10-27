@@ -546,6 +546,37 @@ export function matchAudioLength(kind, id) {
   toast(`Now ${a.dur.toFixed(2)} s, the length of ${name}`, 2200);
 }
 
+/**
+ * Fit / Fill for pictures and videos. "fit": the whole (cropped) picture shows inside the frame, with bars
+ * if its shape differs. "fill": it zooms until the frame is covered, cutting off the overflow evenly. Either
+ * way it's centred. Keyframed scale / position get a keyframe at the playhead. `targets` default to the
+ * selected clips and layers (or the clip under the playhead).
+ */
+export function fitToFrame(mode, targets = visualTargets()) {
+  const { project, time } = getState();
+  const W = project.width, H = project.height;
+  const ok = targets.filter((t) => { const it = findItem(project, t.kind, t.id); const m = it && project.media[it.mediaId]; return m?.w && m?.h && m.kind !== "audio"; });
+  if (!ok.length) return toast("Select a picture or video to fit or fill");
+  edit((p) => ok.forEach(({ kind, id }) => {
+    const it = findItem(p, kind, id), m = p.media[it.mediaId];
+    const lt = Math.max(0, Math.min(it.dur, localTime(p, kind, it, time)));
+    const c = it.crop || { l: 0, t: 0, r: 0, b: 0 };
+    const rot = propAt(it, "rotation", lt, it.transform?.rotation ?? 0);
+    const sideways = Math.round(((rot % 180) + 180) % 180) === 90;
+    const base = Math.min(W / m.w, H / m.h); // scale 1 = the whole picture fits
+    let cw = m.w * (1 - c.l - c.r) * base, ch = m.h * (1 - c.t - c.b) * base;
+    if (sideways) [cw, ch] = [ch, cw];
+    const scale = mode === "fill" ? Math.max(W / cw, H / ch) : Math.min(W / cw, H / ch);
+    // Centre the visible (cropped) part, allowing for flips and rotation like itemBounds does.
+    const ox = ((c.l - c.r) / 2) * m.w * base * scale * (it.flipH ? -1 : 1), oy = ((c.t - c.b) / 2) * m.h * base * scale * (it.flipV ? -1 : 1);
+    const r = (rot * Math.PI) / 180;
+    const dx = ox * Math.cos(r) - oy * Math.sin(r), dy = ox * Math.sin(r) + oy * Math.cos(r);
+    const put = (k, v) => (hasKeys(it, k) ? setKey(it, k, lt, v) : setStatic(it, k, v));
+    put("scale", scale); put("x", 0.5 - dx / W); put("y", 0.5 - dy / H);
+  }));
+  toast(mode === "fill" ? `Filled the frame${ok.length > 1 ? ` (${ok.length} clips)` : ""}` : `Fits inside the frame${ok.length > 1 ? ` (${ok.length} clips)` : ""}`);
+}
+
 /** Mirrors the selected clips/layers left-right (toggle). */
 export function mirrorSelection() {
   const targets = visualTargets();

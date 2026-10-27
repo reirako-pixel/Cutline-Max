@@ -5,7 +5,7 @@ import { clipSpeed, clipTransform, BLEND_MODES, ANIMATIONS, TRANSITIONS, itemBou
 import {
   deleteSelection, rippleDelete, copySelection, duplicateSelection, setClipSpeed, SPEED_PRESETS, freezeFrame,
   mergeClips, detachAudio, applyFilter, toast, setAnimatable, toggleKeyframe, localTime, mirrorSelection,
-  setTextSound, soundToAll, toggleAllKeyframes, allKeyedHere, matchAudioLength, audioUnder,
+  setTextSound, soundToAll, toggleAllKeyframes, allKeyedHere, matchAudioLength, audioUnder, fitToFrame,
 } from "../actions.js";
 import { ADJUST, FILTERS, EFFECTS, EFFECT_CATEGORIES } from "../fx.js";
 import { VOICE_EFFECTS } from "../audiofx.js";
@@ -182,6 +182,10 @@ function TransformSection({ kind, id }) {
   });
   return html`<${Section} title="Transform" right=${html`<span class="row"><${KeyAllButton} kind=${kind} id=${id} />
       <button class="ibtn" title="Reset position, size and rotation" onClick=${reset}><${Icon} n="rotate-ccw" /></button></span>`}>
+    ${!isText && html`<div class="fit-row">
+      <button onClick=${() => fitToFrame("fit", [{ kind, id }])} title="Show the whole picture inside the frame (bars if its shape is different)"><${Icon} n="minimize" /> Fit</button>
+      <button onClick=${() => fitToFrame("fill", [{ kind, id }])} title="Zoom until the picture covers the whole frame (no black bars; the edges that don't fit are cut off)"><${Icon} n="maximize" /> Fill</button>
+    </div>`}
     <${KSlider} kind=${kind} id=${id} path="scale" label="Scale" min=${0.05} max=${4} fallback=${1} format=${pct} />
     <${PosRow} kind=${kind} id=${id} />
     <${KSlider} kind=${kind} id=${id} path="rotation" label="Rotate" min=${-180} max=${180} step=${1} fallback=${0} format=${deg} />

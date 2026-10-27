@@ -11,6 +11,7 @@ import {
   addMediaToTimeline, importFiles, copySettings, pasteSettings, clampZoom, zoomToFit, ZOOM_MIN, ZOOM_MAX, toast, trimToPlayhead, mirrorSelection,
   detachAudio, zoomTimeline, easeSpeedAtCut, neighbour, resetSpeedCurve, toggleMute, applyTransition, setTextSound,
   copySelection, paste, hasClipboard,
+  fitToFrame,
 } from "../actions.js";
 import { createCompound, openCompound, closeCompound, breakApart } from "../compound.js";
 import { saveElement, addElement } from "../elements.js";
@@ -761,6 +762,12 @@ export function Timeline() {
       ...(kind !== "text" && kind !== "effect" ? [{ label: item.mute ? "Unmute" : "Mute", icon: item.mute ? "volume-2" : "volume-x", onClick: toggleMute }] : []),
       ...(hasCurve(item) ? [{ label: "Remove speed curve", icon: "rotate-ccw", onClick: () => resetSpeedCurve(kind, item.id) }] : []),
       { label: "Delete", icon: "trash-2", onClick: deleteSelection },
+      ...((kind === "main" || kind === "overlay") && p.media[item.mediaId]?.w ? ["-",
+        { label: "Fit inside the frame", icon: "minimize", onClick: () => fitToFrame("fit") },
+        { label: "Fill the frame (no black bars)", icon: "maximize", onClick: () => fitToFrame("fill") },
+        ...(kind === "main" ? [{ label: "Fill the frame — all clips on the main track", icon: "maximize", onClick: () => fitToFrame("fill", p.main.map((x) => ({ kind: "main", id: x.id }))) },
+          { label: "Fit inside the frame — all clips on the main track", icon: "minimize", onClick: () => fitToFrame("fit", p.main.map((x) => ({ kind: "main", id: x.id }))) }] : []),
+        "-"] : []),
       ...((kind === "main" || kind === "overlay") && p.media[item.mediaId]?.kind !== "compound"
         ? [{ label: "Save as element", icon: "bookmark-plus", onClick: () => saveElement(kind, item.id) }] : []),
       "-",
