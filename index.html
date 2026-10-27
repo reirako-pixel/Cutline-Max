@@ -432,6 +432,8 @@
     .seg .label { position: relative; z-index: 1; background: rgba(0,0,0,.55); padding: 1px 6px; border-radius: 4px; }
     .seg .speed-badge, .seg .badge, .seg .kmark, .seg .handle { z-index: 2; }
     .seg .badge { position: relative; background: rgba(0,0,0,.5); padding: 0 4px; border-radius: 4px; }
+    .seg .badge-btn { pointer-events: auto; cursor: pointer; border: 1px solid transparent; color: var(--text); font: inherit; font-size: 11px; line-height: 16px; margin-left: 6px; }
+    .seg .badge-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(0,0,0,.75); }
     .stage-hint { position: absolute; inset: 0; display: grid; place-content: center; gap: 8px; text-align: center; padding: 24px;
       color: var(--muted); pointer-events: none; max-width: 520px; margin: auto; }
     .stage-hint b { color: var(--text); font-size: 15px; }
@@ -595,6 +597,14 @@
     .seg.selected .handle::after, .seg .handle:hover::after { opacity: 1; }
     .seg .handle:hover { background: rgba(255,255,255,.12); }
     .main-track .diamond { top: 2px; width: 18px; height: 18px; font-size: 9px; z-index: 4; }
+    .tr-pill { position: absolute; top: 50%; transform: translateY(-50%); height: 26px; z-index: 9; display: flex; align-items: center; justify-content: center;
+      padding: 0 6px; border-radius: 13px; font-size: 11px; font-weight: 600; cursor: pointer; overflow: hidden; white-space: nowrap;
+      color: var(--accent); background: color-mix(in srgb, var(--panel) 80%, transparent); border: 1.5px solid var(--accent); box-shadow: 0 2px 8px rgba(0,0,0,.45); }
+    .tr-pill:hover { background: color-mix(in srgb, var(--accent) 22%, var(--panel)); }
+    .tr-pill.selected { background: var(--accent); color: var(--accent-ink); }
+    .tr-pill .ell { min-width: 0; }
+    .lane-effect { height: 42px; }
+    .lane-effect .seg { top: 6px; bottom: 6px; font-size: 12px; }
     .trimtip { position: fixed; z-index: 50; pointer-events: none; background: #000d; color: #fff; border: 1px solid var(--accent);
       border-radius: 5px; padding: 3px 8px; font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
     /* text presets */

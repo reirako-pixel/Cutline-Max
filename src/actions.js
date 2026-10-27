@@ -315,6 +315,7 @@ function mainSplitProblem(project, seg, time) {
  * and main clips. With nothing selected it cuts the main clip under the playhead.
  */
 export function splitAtPlayhead() {
+  if (getState().playing) pause(); // cutting while playing stops on the frame you cut at
   const { project, time, selection } = getState();
   const inside = (x) => time > x.start + 0.05 && time < x.start + x.dur - 0.05;
   const timed = selection.filter((s) => ["text", "overlay", "audio", "effect"].includes(s.kind));
@@ -356,6 +357,7 @@ function splitMain(p, seg, time) {
 
 /** Ctrl+B: splits every clip, layer, text, audio item and effect under the playhead, whatever is selected. */
 export function splitAllAtPlayhead() {
+  if (getState().playing) pause(); // cutting while playing stops on the frame you cut at
   const { project, time } = getState();
   const inside = (x) => time > x.start + 0.05 && time < x.start + x.dur - 0.05;
   const seg = layoutMain(project).find(inside);
@@ -371,6 +373,7 @@ export function splitAllAtPlayhead() {
 
 /** Razor tool: splits one item at a clicked time. */
 export function splitItemAt(kind, id, time) {
+  if (getState().playing) pause(); // cutting while playing stops on the frame you cut at
   const { project } = getState();
   if (kind === "main") {
     const seg = layoutMain(project).find((s) => s.id === id);
@@ -392,6 +395,7 @@ export function splitItemAt(kind, id, time) {
  * With nothing selected it works on the main-track clip under the playhead. The main track closes the gap.
  */
 export function trimToPlayhead(side) {
+  if (getState().playing) pause(); // cutting while playing stops on the frame you cut at
   const { project, time, selection } = getState();
   let targets = selection.filter((s) => ["main", "overlay", "audio", "text", "effect"].includes(s.kind));
   if (!targets.length) {
@@ -528,13 +532,17 @@ export function matchAudioLength(kind, id) {
   const a = audioUnder(project, kind, item);
   if (!a) return toast("No audio under this item: move it over a music or voice-over clip first", 2600);
   const name = project.media[a.mediaId]?.name || "the audio";
+  // A video can't run longer than what's left of it after its start point (at its speed).
+  const m = project.media[item.mediaId];
+  const room = m?.kind === "video" ? Math.max(0.1, ((m.duration || 0) - (item.in || 0)) / (clipSpeed(item) || 1)) : Infinity;
+  const dur = Math.min(a.dur, room);
   edit((p) => {
     const it = findItem(p, kind, id);
     if (!it) return;
-    if (kind === "main") { it.dur = a.dur; return; }
+    if (kind === "main") { it.dur = dur; return; }
     const shift = a.start - it.start;
     it.start = a.start;
-    it.dur = a.dur;
+    it.dur = dur;
     if (it.words && shift) it.words = it.words.map((w) => ({ ...w, t0: w.t0 + shift, t1: w.t1 + shift }));
     // A layer that now runs into another one on its track moves to the first free track.
     if (kind === "overlay") {
@@ -543,7 +551,8 @@ export function matchAudioLength(kind, id) {
       if (clash) it.track = freeTrack(p.overlays, it.start, it.dur, it.id);
     }
   });
-  toast(`Now ${a.dur.toFixed(2)} s, the length of ${name}`, 2200);
+  if (dur < a.dur - 0.01) toast(`The video only has ${dur.toFixed(2)} s left, so it now plays to its end (${name} is ${a.dur.toFixed(2)} s). Slow it down in Speed to fill the rest.`, 4500);
+  else toast(`Now ${a.dur.toFixed(2)} s, the length of ${name}`, 2200);
 }
 
 /**

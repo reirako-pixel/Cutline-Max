@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { useStore, usePanelTime, edit, editLive, checkpoint, findItem, getState, setState } from "../store.js";
 import { clipSpeed, clipTransform, BLEND_MODES, ANIMATIONS, TRANSITIONS, itemBounds } from "../engine.js";
 import {
-  deleteSelection, rippleDelete, copySelection, duplicateSelection, setClipSpeed, SPEED_PRESETS, freezeFrame,
+  pause, deleteSelection, rippleDelete, copySelection, duplicateSelection, setClipSpeed, SPEED_PRESETS, freezeFrame,
   mergeClips, detachAudio, applyFilter, toast, setAnimatable, toggleKeyframe, localTime, mirrorSelection,
   setTextSound, soundToAll, toggleAllKeyframes, allKeyedHere, matchAudioLength, audioUnder, fitToFrame,
 } from "../actions.js";
@@ -21,6 +21,7 @@ import { saveTextPreset, saveAdjustPreset, saveAudioPreset, presetsOf, applyAudi
 import { MultiClipInspector, PresetButtons, SavePresetButton } from "./multiclip.js";
 import { MaskSection, startCrop } from "./mask.js";
 import { lastDur, rememberDur } from "../settings.js";
+import { transcribeClip, wordsToLyrics, lyricsModel, LYRICS_LANGUAGES } from "../captions.js";
 import { copySettings, pasteSettings } from "../actions.js";
 import { ShapeFields, shapeName } from "./shapes.js";
 import { VizFields, BeatSyncSection } from "./visualizer.js";
@@ -414,6 +415,13 @@ function AnimateSection({ kind, item, textOnly, onAnim, note }) {
 function VisualInspector({ kind, item, project }) {
   const [tab, setTab] = useState("video");
   const [sub, setSub] = useState("basic");
+  // A badge clicked on the timeline (✦ effects, ◐ filter…) opens that part of this panel.
+  const focus = useStore((s) => s.inspectorFocus);
+  useEffect(() => {
+    if (!focus || focus.id !== item.id) return;
+    setTab(focus.tab);
+    if (focus.sub) setSub(focus.sub);
+  }, [focus?.n]);
   const media = project.media[item.mediaId];
   const hasSound = media?.kind === "video";
   const tabs = [["video", "Video"], ...(hasSound ? [["audio", "Audio"]] : []), ["speed", "Speed"], ["animation", "Animation"], ["adjust", "Adjust"]];
@@ -426,7 +434,7 @@ function VisualInspector({ kind, item, project }) {
         <${BlendSection} kind=${kind} item=${item} />
         <${LookSection} kind=${kind} item=${item} />
         <${SourceSection} kind=${kind} item=${item} media=${media} />
-        ${media?.kind === "image" && html`<${MatchAudioButton} kind=${kind} item=${item} />`}
+        ${(media?.kind === "image" || media?.kind === "video") && html`<${MatchAudioButton} kind=${kind} item=${item} />`}
         <div class="action-row">
           ${media?.kind === "video" && html`<button onClick=${() => freezeFrame()} title="Hold the frame under the playhead for 3 seconds (F)"><${Icon} n="snowflake" /> Freeze</button>`}
           ${kind === "main" && html`<button onClick=${mergeClips} title="Select neighbouring pieces of one clip, then merge"><${Icon} n="combine" /> Merge</button>`}
@@ -644,7 +652,7 @@ function MatchAudioButton({ kind, item }) {
   const name = a && (project.media[a.mediaId]?.name || "audio");
   const same = a && Math.abs(a.dur - item.dur) < 0.01 && (kind === "main" || Math.abs(a.start - item.start) < 0.01);
   const title = !a ? "Put this over a music or voice-over clip on the timeline to match its length"
-    : kind === "main" ? `Make this image last ${a.dur.toFixed(2)} s, as long as ${name}`
+    : kind === "main" ? `Make this ${project.media[item.mediaId]?.kind === "video" ? "video" : "image"} last ${a.dur.toFixed(2)} s, as long as ${name}`
     : `Start with ${name} and last as long as it (${a.dur.toFixed(2)} s)`;
   return html`<button class="wide match-audio" disabled=${!a || same} onClick=${() => matchAudioLength(kind, item.id)} title=${title}>
     <${Icon} n="audio-lines" /> ${same ? "Matches the audio length" : "Match audio length"}</button>`;
@@ -787,10 +795,67 @@ function MultiTextFields({ texts }) {
 
 // ---------------- audio items & timeline effects ----------------
 
+/** Audio clip › Lyrics: hears the song (this clip only) and writes timed lyric lines, in English or Tagalog. */
+function AutoLyrics({ item }) {
+  const remembered = (k, d) => { try { return localStorage.getItem(k) || d; } catch { return d; } };
+  const [language, setLanguage] = useState(() => remembered("cutline.lyricsLang", "english"));
+  const [quality, setQuality] = useState(() => remembered("cutline.lyricsQuality", "better"));
+  const [look, setLook] = useState(() => remembered("cutline.lyricsLook", "karaoke"));
+  const [status, setStatus] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const count = useStore((s) => s.project.texts.filter((t) => t.lyricsFor === item.id).length);
+  const keep = (k, v, set) => { set(v); try { localStorage.setItem(k, v); } catch { /* ignore */ } };
+  const run = async () => {
+    if (getState().playing) pause();
+    setBusy(true);
+    setStatus("Getting the song ready…");
+    const started = performance.now();
+    try {
+      const chunks = await transcribeClip(getState().project, findItem(getState().project, "audio", item.id) || item, { model: lyricsModel(language, quality), language }, (p) => setStatus(
+        p.stage === "audio" ? "Getting the song ready…"
+          : p.stage === "download" ? `Downloading the speech model (first time only)… ${Math.round(p.progress || 0)}%`
+          : "Listening to the song… this takes a while (about as long as the song, or longer on the Better setting)",
+      ));
+      const lines = wordsToLyrics(chunks, { karaoke: look === "karaoke", forId: item.id });
+      if (!lines.length) { setStatus("No singing was found in this clip. Try the Better accuracy, or check the language."); setBusy(false); return; }
+      edit((p) => { p.texts = p.texts.filter((t) => t.lyricsFor !== item.id).concat(lines); });
+      setStatus(`Added ${lines.length} lyric lines in ${Math.round((performance.now() - started) / 1000)} s. Click a line on the timeline to fix its words; style changes can apply to all of them.`);
+    } catch (err) {
+      setStatus("Couldn't make lyrics: " + err.message);
+    }
+    setBusy(false);
+  };
+  return html`<div>
+    <p class="muted">Cutline listens to this song and writes the lyrics as timed lines on the timeline. It runs on your computer (nothing is uploaded); the speech model downloads once.</p>
+    <${Field} label="Language">
+      <select value=${language} disabled=${busy} onChange=${(e) => keep("cutline.lyricsLang", e.target.value, setLanguage)}>
+        ${Object.entries(LYRICS_LANGUAGES).map(([k, v]) => html`<option key=${k} value=${k}>${v}</option>`)}
+      </select>
+    <//>
+    <${Field} label="Accuracy">
+      <select value=${quality} disabled=${busy} onChange=${(e) => keep("cutline.lyricsQuality", e.target.value, setQuality)}>
+        <option value="better">Better: hears singing well (~250 MB model, slower)</option>
+        <option value="fast">Fast (~80 MB model)</option>
+      </select>
+    <//>
+    <${Field} label="Look">
+      <select value=${look} disabled=${busy} onChange=${(e) => keep("cutline.lyricsLook", e.target.value, setLook)}>
+        <option value="karaoke">Karaoke: each word lights up as it's sung</option>
+        <option value="plain">Plain lyric lines</option>
+      </select>
+    <//>
+    ${status && html`<p class="status">${busy && html`<span class="spin" /> `}${status}</p>`}
+    <button class="primary wide" disabled=${busy} onClick=${run}><${Icon} n="mic-vocal" /> ${busy ? "Working…" : count ? "Make the lyrics again" : "Make lyrics"}</button>
+    ${count > 0 && !busy && html`<button class="wide" onClick=${() => edit((p) => { p.texts = p.texts.filter((t) => t.lyricsFor !== item.id); })}>Remove this song's lyrics (${count} lines)</button>`}
+    <p class="muted small">Works best when the voice is clear over the music. Check the words afterwards: fast rap, shouting or heavy effects can trip it up.</p>
+  </div>`;
+}
+
 function AudioInspector({ item, project }) {
   const media = project.media[item.mediaId];
   const [tab, setTab] = useState("audio");
-  return html`<${Shell} tabs=${[["audio", "Audio"], ["speed", "Speed"]]} tab=${tab} setTab=${setTab} note=${media?.name}>
+  return html`<${Shell} tabs=${[["audio", "Audio"], ["speed", "Speed"], ["lyrics", "Lyrics"]]} tab=${tab} setTab=${setTab} note=${media?.name}>
+    ${tab === "lyrics" && html`<${AutoLyrics} key=${item.id} item=${item} />`}
     ${tab === "audio" && html`
       <${AudioSection} kind="audio" item=${item} media=${media} />
       <${Section} title="Volume keyframe curves" open=${false}><${CurveEditor} kind="audio" id=${item.id} /><//>`}

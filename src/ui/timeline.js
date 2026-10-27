@@ -29,7 +29,7 @@ import { html, fmt, Icon } from "./kit.js";
 
 const additiveKey = (e) => e.shiftKey || e.ctrlKey || e.metaKey;
 const LABEL = 150;
-const LANE_H = { effect: 34, text: 52, overlay: 52, main: 72, audio: 48 };
+const LANE_H = { effect: 42, text: 52, overlay: 52, main: 72, audio: 48 };
 const LANE_KEY = { effect: "effects", overlay: "overlays", audio: "audio" };
 
 /**
@@ -805,12 +805,27 @@ export function Timeline() {
   const overlayTracks = [...Array(maxTrack(project.overlays) + 1).keys()].reverse();
   const audioTracks = [...Array(maxTrack(project.audio) + 1).keys()];
 
-  const fxBadges = (s) => [
-    s.filter?.type && html`<b class="badge" title="Filter">◐</b>`,
-    s.fx?.length && html`<b class="badge" title="Effects">✦</b>`,
-    (s.cutout?.mode || s.chroma?.on) && html`<b class="badge" title="Background removed">✂</b>`,
-    s.mute && html`<b class="badge" title="Muted">🔇</b>`,
-  ];
+  /**
+   * What's applied to a clip, as small buttons on it: clicking one selects the clip and opens that part of its
+   * panel (effects, filter, background removal, beat sync), so they're easy to reach even on a busy timeline.
+   */
+  const fxBadges = (s, kind) => {
+    const open = (tab, sub) => (e) => {
+      e.stopPropagation();
+      if (getState().playing) pause();
+      select([{ kind, id: s.id }]);
+      setState({ inspectorFocus: { id: s.id, tab, sub, n: Date.now() } });
+    };
+    const btn = (key, label, icon, tab, sub) => html`<button key=${key} class="badge badge-btn" title=${`${label} (click to edit)`}
+      onPointerDown=${(e) => e.stopPropagation()} onClick=${open(tab, sub)}>${icon}</button>`;
+    return [
+      s.filter?.type && btn("f", "Filter", "◐", "adjust", null),
+      s.fx?.length && btn("x", `Effects: ${s.fx.length}`, "✦", "video", "effects"),
+      (s.cutout?.mode || s.chroma?.on) && btn("c", "Background removed", "✂", "video", "removebg"),
+      s.beat?.type && s.beat.type !== "off" && btn("b", "Beat sync", "♪", "video", "beat"),
+      s.mute && html`<b key="m" class="badge" title="Muted">🔇</b>`,
+    ];
+  };
 
   return html`<section class="timeline">
     <${ResizeBar} />
@@ -891,7 +906,7 @@ export function Timeline() {
 
         ${overlayTracks.map((tr) => html`<div class=${"track lane-overlay" + (trackFlags(project, `overlay:${tr}`).locked ? " locked" : "") + (trackFlags(project, `overlay:${tr}`).hidden ? " hidden" : "")} data-lane="overlay" data-track=${tr} key=${"o" + tr}>
           <${TrackHead} k=${`overlay:${tr}`} label=${`Layer ${tr + 1}`} icon="layers" project=${project} />
-          ${project.overlays.filter((x) => (x.track ?? 0) === tr).map((x) => laneItem("overlay", x, "overlay", project.media[x.mediaId]?.name, fxBadges(x)))}
+          ${project.overlays.filter((x) => (x.track ?? 0) === tr).map((x) => laneItem("overlay", x, "overlay", project.media[x.mediaId]?.name, fxBadges(x, "overlay")))}
         </div>`)}
 
         <div class=${"track main-track" + (trackFlags(project, "main").locked ? " locked" : "") + (trackFlags(project, "main").hidden ? " hidden" : "")} data-lane="main">
@@ -930,7 +945,7 @@ export function Timeline() {
                 }} title="Drag to trim or extend the start" />
                 <span class="label">${media?.kind === "compound" && html`<${Icon} n="layers" /> `}${media?.name}</span>
                 ${hasCurve(s) ? html`<b class="speed-badge" title="Speed curve">〰 curve</b>` : sp !== 1 && html`<b class="speed-badge">${+sp.toFixed(2)}×</b>`}
-                ${fxBadges(s)}
+                ${fxBadges(s, "main")}
                 ${keyMarks("main", s, s.start)}
                 <div class="handle r" onPointerDown=${(e) => {
                   // Magnet off: the next clip stays where it is (its gap grows or shrinks instead).
@@ -950,8 +965,11 @@ export function Timeline() {
                   title="Drag to trim or extend the end" />
               </div>
               ${i < segs.length - 1 && !segs[i + 1].gap && html`<div data-kind=${s.transition ? "transition" : undefined} data-id=${s.id}
-                  class=${"diamond" + (s.transition ? " has" : "") + (isSelected("transition", s.id) ? " selected" : "")}
-                  style=${{ left: LABEL + (s.start + s.dur) * zoom + shiftPx(i) }}
+                  class=${(s.transition ? "tr-pill" : "diamond") + (isSelected("transition", s.id) ? " selected" : "")}
+                  style=${s.transition
+                    // A transition shows as a block as long as it lasts, centred on the cut and above the trim handles.
+                    ? (() => { const w = Math.max(30, s.transition.dur * zoom); return { left: LABEL + (s.start + s.dur) * zoom + shiftPx(i) - w / 2, width: w }; })()
+                    : { left: LABEL + (s.start + s.dur) * zoom + shiftPx(i) }}
                   title=${(s.transition ? TRANSITIONS[s.transition.type] : "Add transition") + " · right-click: smooth the speed at this cut"}
                   onContextMenu=${(e) => {
                     e.preventDefault(); e.stopPropagation();
@@ -968,7 +986,7 @@ export function Timeline() {
                     e.stopPropagation();
                     if (!s.transition) edit((p) => (p.main.find((y) => y.id === s.id).transition = { type: "crossfade", dur: lastDur("transition", 0.6) }));
                     pick(e, "transition", s.id);
-                  }}>◆</div>`}
+                  }}>${s.transition ? html`<span class="ell">◆ ${s.transition.dur * zoom > 90 ? TRANSITIONS[s.transition.type] : ""}</span>` : "◆"}</div>`}
             <//>`;
           })}
           ${segs.length === 0 && html`<div class="empty">Drag clips here from the library, or preview one and press “Add to timeline”</div>`}
@@ -978,7 +996,7 @@ export function Timeline() {
           <${TrackHead} k=${`audio:${tr}`} label=${`Audio ${tr + 1}`} icon="music" project=${project} hide=${false} />
           ${project.audio.filter((x) => (x.track ?? 0) === tr).map((x) => {
             const media = project.media[x.mediaId];
-            return laneItem("audio", x, "audio", media?.name, [html`<${Wave} key="w" media=${media} item=${x} width=${x.dur * zoom} height=${LANE_H.audio - 16} />`, ...fxBadges(x)]);
+            return laneItem("audio", x, "audio", media?.name, [html`<${Wave} key="w" media=${media} item=${x} width=${x.dur * zoom} height=${LANE_H.audio - 16} />`, ...fxBadges(x, "audio")]);
           })}
         </div>`)}
 

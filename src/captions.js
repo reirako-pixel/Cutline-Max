@@ -12,7 +12,10 @@ let worker = null;
 export async function transcribe(project, { model, language }, onProgress) {
   onProgress?.({ stage: "audio" });
   const mix = await mixAudio(project, 16000, 1);
-  const audio = mix.getChannelData(0).slice();
+  return runWhisper(mix.getChannelData(0).slice(), { model, language }, onProgress);
+}
+
+function runWhisper(audio, { model, language }, onProgress) {
   worker ??= new Worker(new URL("./whisper-worker.js", import.meta.url), { type: "module" });
   return new Promise((resolve, reject) => {
     worker.onmessage = ({ data }) => {
@@ -21,6 +24,65 @@ export async function transcribe(project, { model, language }, onProgress) {
       else if (data.type === "error") reject(new Error(data.message));
     };
     worker.postMessage({ audio, model, language }, [audio.buffer]);
+  });
+}
+
+// ---------- auto lyrics (Audio clip › Lyrics) ----------
+
+export const LYRICS_LANGUAGES = { english: "English", tagalog: "Tagalog (Filipino)" };
+/** Whisper models for lyrics: "better" is larger but hears sung words much more reliably. */
+export function lyricsModel(language, quality) {
+  if (language === "english") return quality === "fast" ? "Xenova/whisper-base.en" : "Xenova/whisper-small.en";
+  return quality === "fast" ? "Xenova/whisper-base" : "Xenova/whisper-small";
+}
+
+/**
+ * Listens to one audio clip on its own (not the whole mix, so voice-overs and video sound stay out) and
+ * returns its words timed on the timeline.
+ */
+export async function transcribeClip(project, item, { model, language }, onProgress) {
+  onProgress?.({ stage: "audio" });
+  const solo = { ...project, main: [], overlays: [], texts: [], effects: [], trackState: {}, audio: [{ ...item, start: 0, mute: false }] };
+  const mix = await mixAudio(solo, 16000, 1);
+  const chunks = await runWhisper(mix.getChannelData(0).slice(), { model, language: model.endsWith(".en") ? null : language }, onProgress);
+  return chunks.map((c) => ({ ...c, timestamp: c.timestamp?.map((t) => (t == null ? t : t + item.start)) }));
+}
+
+/** Not lyrics: Whisper's notes for music or silence ("[Music]", "♪", "(instrumental)"). */
+const noise = (w) => /^\s*[\[(♪♫*]/.test(w) || /^\s*(music|instrumental|applause|silence)\W*$/i.test(w);
+
+/**
+ * Words → lyric lines: a new line at a pause in the singing, at the end of a sentence, or when a line gets
+ * long. karaoke: each word lights up as it's sung.
+ */
+export function wordsToLyrics(chunks, { karaoke = true, forId } = {}) {
+  const words = chunks
+    .filter((c) => c.text?.trim() && c.timestamp?.[0] != null && !noise(c.text))
+    .map((c) => ({ w: c.text, t0: c.timestamp[0], t1: c.timestamp[1] ?? c.timestamp[0] + 0.3 }));
+  const lines = [];
+  let cur = [];
+  for (const w of words) {
+    const last = cur[cur.length - 1];
+    const len = cur.reduce((a, x) => a + x.w.length, 0);
+    if (cur.length && (cur.length >= 8 || len > 34 || (last && w.t0 - last.t1 > 0.7) || /[.!?,]$/.test(last.w.trim()))) { lines.push(cur); cur = []; }
+    cur.push(w);
+  }
+  if (cur.length) lines.push(cur);
+  const style = {
+    ...defaultTextStyle(), size: 70, weight: 800, color: "#ffffff", stroke: "#000000", strokeWidth: 5,
+    shadow: { color: "#000000aa", blur: 10, x: 0, y: 4 }, highlight: karaoke ? "#3df2ff" : "#ffffff",
+  };
+  return lines.map((g, i) => {
+    g[0] = { ...g[0], w: g[0].w.trimStart() };
+    const start = g[0].t0;
+    // Each line stays up until the next one starts (or a moment after its last word).
+    const next = lines[i + 1]?.[0]?.t0;
+    const end = Math.max(g[g.length - 1].t1 + 0.4, start + 0.6);
+    return {
+      id: uid(), caption: true, lyricsFor: forId, start, dur: (next != null ? Math.min(end, next) : end) - start,
+      text: g.map((w) => w.w).join(""), words: g, x: 0.5, y: 0.84, scale: 1, style: { ...style },
+      anim: { in: { type: "fade", dur: 0.15 }, out: { type: "none", dur: 0.2 } },
+    };
   });
 }
 

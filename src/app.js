@@ -1,10 +1,10 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
-  useStore, getState, setState, edit, editLive, undo, redo, projectDuration, isSelected, select, findItem, checkpoint,
+  useStore, getState, setState, edit, editLive, undo, redo, projectDuration, isSelected, select, findItem, checkpoint, layoutMain,
 } from "./store.js";
 import {
-  drawFrame, frameStatus, syncMedia, framesReady, renderLock, activeClips, activeOverlays, itemBounds, hitTest, transformAt, TRANSITIONS,
+  drawFrame, frameStatus, syncMedia, framesReady, renderLock, activeClips, activeOverlays, itemBounds, hitTest, transformAt, TRANSITIONS, activeTimed,
 } from "./engine.js";
 import {
   clock, play, pause, togglePlay, seek, toast, importFiles, addMediaToTimeline, splitAtPlayhead, deleteSelection,
@@ -27,7 +27,8 @@ import { MaskHandles, CropBox } from "./ui/mask.js";
 import { ShapesTab } from "./ui/shapes.js";
 import { VisualizerTab } from "./ui/visualizer.js";
 import { TitlesTab } from "./ui/titles.js";
-import { TITLE_CATEGORIES } from "./titles.js";
+import { TITLE_CATEGORIES, titleName } from "./titles.js";
+import { vizStyleName } from "./vizdraw.js";
 import { SettingsDialog } from "./ui/settings.js";
 import { UpdateBar, startUpdateChecks } from "./ui/updates.js";
 import { cacheGet, cacheSet, mediaKey } from "./cache.js";
@@ -559,6 +560,22 @@ function nudgeSelection(dxPx, dyPx) {
   return true;
 }
 
+/** A short name for something on the timeline, for the player's Select menu. */
+function itemLabel(project, kind, it) {
+  const media = project.media[it.mediaId]?.name || "";
+  if (kind === "text") {
+    if (it.title) return ["heading", `Title: ${it.title.lines?.find((l) => l.trim()) || titleName(it.title.tpl)}`];
+    if (it.viz) return ["audio-waveform", `Visualizer: ${it.vizName || vizStyleName(it.viz.style)}`];
+    if (it.shape) return ["shapes", "Shape"];
+    return ["type", `${it.caption ? "Caption" : "Text"}: ${it.text.replace(/\s+/g, " ").slice(0, 30)}`];
+  }
+  if (kind === "overlay") return ["layers", `Layer: ${media}`];
+  if (kind === "main") return ["film", `Clip: ${media}`];
+  if (kind === "effect") return ["sparkles", `Effect layer: ${it.name || "Effect"}`];
+  if (kind === "transition") return ["arrow-left-right", `Transition: ${TRANSITIONS[it.transition?.type] || "Transition"}`];
+  return ["square", kind];
+}
+
 function TransformOverlay({ rect }) {
   const project = useStore((s) => s.project);
   const time = useStore((s) => (s.playing && !s.selection.length ? Math.floor(s.time * 4) / 4 : s.time));
@@ -583,7 +600,16 @@ function TransformOverlay({ rect }) {
     if (e.button !== 0) return;
     if (getState().playing) pause();
     const pt = toFrac(e);
-    const hit = visible.find((v) => hitTest(bounds(v.kind, v.item), pt.x, pt.y, W, H));
+    const hits = visible.filter((v) => hitTest(bounds(v.kind, v.item), pt.x, pt.y, W, H));
+    let hit = hits[0];
+    // Alt+click: the next thing down under the pointer (a photo under a visualizer, a layer under a title…).
+    if (e.altKey && hits.length > 1) {
+      const cur = getState().selection;
+      const at = hits.findIndex((v) => cur.length === 1 && cur[0].kind === v.kind && cur[0].id === v.item.id);
+      hit = hits[(at + 1) % hits.length];
+      select([{ kind: hit.kind, id: hit.item.id }]);
+      toast(`${itemLabel(getState().project, hit.kind, hit.item)[1]} · Alt+click again for the next one down`, 2200);
+    }
     if (!hit) {
       if (!additiveKey(e)) select([]);
       return;
@@ -689,7 +715,29 @@ function TransformOverlay({ rect }) {
     });
   };
 
-  return html`<div class="overlay" ref=${ref} onPointerDown=${onPointerDown}
+  /** Right-click: a list of everything under the pointer, plus effect layers and a transition playing now. */
+  const onContextMenu = (e) => {
+    e.preventDefault();
+    if (getState().playing) pause();
+    const project = getState().project, pt = toFrac(e);
+    const found = visible.filter((v) => hitTest(bounds(v.kind, v.item), pt.x, pt.y, W, H)).map((v) => ({ kind: v.kind, item: v.item }));
+    for (const fx of activeTimed(project.effects, time)) found.push({ kind: "effect", item: fx.item });
+    const segs = layoutMain(project);
+    segs.forEach((sg, i) => {
+      const cut = sg.start + sg.dur, d = sg.transition?.dur || 0;
+      if (sg.transition && i < segs.length - 1 && Math.abs(time - cut) <= d / 2) found.push({ kind: "transition", item: project.main.find((m) => m.id === sg.id) });
+    });
+    if (!found.length) return;
+    setState({ ctxMenu: { x: e.clientX, y: e.clientY, items: [
+      { heading: "Select" },
+      ...found.map(({ kind, item }) => {
+        const [icon, label] = itemLabel(project, kind, item);
+        return { label, icon, on: isSelected(kind, item.id), onClick: () => select([{ kind, id: item.id }]) };
+      }),
+    ] } });
+  };
+
+  return html`<div class="overlay" ref=${ref} onPointerDown=${onPointerDown} onContextMenu=${onContextMenu}
       style=${{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }}>
     ${guides?.v && html`<div class="guide v" />`}
     ${guides?.h && html`<div class="guide h" />`}
