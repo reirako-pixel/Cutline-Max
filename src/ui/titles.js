@@ -2,9 +2,9 @@
 // for editing one. A title is a layer on the text tracks: drag it in the player, trim it on the timeline.
 import { useEffect, useRef } from "react";
 import { getState, setState, edit, editLive, uid, findItem, defaultTextStyle, checkpoint } from "../store.js";
-import { TITLE_TEMPLATES, TITLE_CATEGORIES, titleTemplate, newTitle, titlePos, titleFonts, drawTitle, titleBox, resetTitleBoxes, TEXTURE_NAMES, drawStyleSample } from "../titles.js";
+import { TITLE_TEMPLATES, TITLE_CATEGORIES, titleTemplate, newTitle, titlePos, titleFonts, drawTitle, titleBox, resetTitleBoxes, TEXTURE_NAMES, drawStyleSample, titleIsBoxed } from "../titles.js";
 import { FONTS, loadFont } from "./fonts.js";
-import { html, Field, Section, Slider } from "./kit.js";
+import { html, Field, Section, Slider, KSlider } from "./kit.js";
 import { setting } from "../settings.js";
 
 // Text measured before a web font arrives has the wrong width: measure again once fonts load.
@@ -193,7 +193,32 @@ export function TitleStyleFields({ t }) {
   const colour = (key, k, label, def) => html`<${Field} label=${label}><input type="color" value=${part(key)[k] || def} onChange=${(e) => put(key, k, e.target.value)} /><//>`;
   const toggle = (key, label, defaults) => html`<label class="check"><input type="checkbox" checked=${!!part(key).on}
     onChange=${(e) => set((l) => (l[key] = { ...defaults, ...(l[key] || {}), on: e.target.checked }))} /> ${label}</label>`;
+  const d = titleTemplate(t.title.tpl)[3];
+  const lineLabel = (i) => d.labels?.[i] || (d.lines.length > 1 ? `Line ${i + 1}` : "Text");
+  const perLine = (key, i, v, live) => (live ? editLive : edit)((p) => {
+    const x = findItem(p, "text", t.id);
+    if (!x) return;
+    const arr = [...(x.title[key] || [])];
+    while (arr.length < d.lines.length) arr.push(key === "lineScale" ? 1 : null);
+    arr[i] = v;
+    x.title = { ...x.title, [key]: arr };
+  });
+  const boxed = titleIsBoxed(t.title.tpl);
   return html`<div class="title-style">
+    <${Section} title="Size & colour">
+      <${KSlider} kind="text" id=${t.id} path="scale" label="Size" min=${0.1} max=${4} fallback=${1} format=${(v) => `${Math.round(v * 100)}%`} />
+      ${d.lines.length > 1 && !boxed && d.lines.map((_, i) => html`<${Slider} key=${"s" + i} label=${`${lineLabel(i)} size`} value=${t.title.lineScale?.[i] || 1}
+        min=${0.3} max=${3} step=${0.01} format=${(v) => `${Math.round(v * 100)}%`} onChange=${(v, live) => perLine("lineScale", i, v, live)} />`)}
+      ${d.lines.length > 1 && boxed && html`<p class="muted small">This design keeps its text in boxes, so its lines can't be sized one by one. Size above resizes the whole title.</p>`}
+      <div class="line-colors">
+        ${d.lines.map((_, i) => html`<div key=${"c" + i} class="line-color">
+          <span>${lineLabel(i)} colour</span>
+          <input type="color" value=${t.title.lineColor?.[i] || "#ffffff"} onChange=${(e) => perLine("lineColor", i, e.target.value)} />
+          ${t.title.lineColor?.[i] ? html`<button class="mini" title="Use the template's colour again" onClick=${() => perLine("lineColor", i, null)}>Reset</button>`
+            : html`<span class="muted small">template</span>`}
+        </div>`)}
+      </div>
+    <//>
     ${STYLE_PRESETS.map(([group, list]) => html`<${Section} key=${group} title=${group} open=${group !== "Textures"}>
       <div class="style-grid">
         ${list.map(([name]) => html`<button key=${name} class="style-chip" title=${`${group}: ${name}`} onClick=${() => apply(presetLooks.get(`${group}|${name}`))}>
@@ -234,7 +259,9 @@ export function TitleStyleFields({ t }) {
       ${glow.on && html`${colour("glow", "color", "Colour", "#ffffff")}
         ${num("glow", "size", "Size", 0, 80, 1, 24)}${num("glow", "strength", "Strength", 1, 4, 1, 2)}`}
     <//>
-    ${t.title.look && html`<button class="wide" onClick=${() => edit((p) => { const x = findItem(p, "text", t.id); if (x) { x.title = { ...x.title }; delete x.title.look; } })}>
-      Back to the template's own style</button>`}
+    ${(t.title.look || t.title.lineColor?.some(Boolean) || t.title.lineScale?.some((v) => v && v !== 1)) && html`<button class="wide" onClick=${() => edit((p) => {
+      const x = findItem(p, "text", t.id);
+      if (x) { x.title = { ...x.title }; delete x.title.look; delete x.title.lineColor; delete x.title.lineScale; }
+    })}>Back to the template's own style</button>`}
   </div>`;
 }

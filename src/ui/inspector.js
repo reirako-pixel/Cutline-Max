@@ -570,6 +570,8 @@ const withAlpha = (c, a) => c.slice(0, 7) + Math.round(a * 255).toString(16).pad
 function TextLookFields({ st, setSt }) {
   const shadow = st.shadow;
   return html`<div>
+    <${Slider} label="Size" value=${st.size} min=${8} max=${400} step=${1} format=${(v) => `${Math.round(v)}`}
+      onChange=${(v, live) => setSt("size", Math.round(v), live)} />
     <div class="grid2">
       <${Field} label="Colour"><input type="color" value=${st.color} onChange=${(e) => setSt("color", e.target.value)} /><//>
       <${Field} label="Highlight"><input type="color" value=${st.highlight} onChange=${(e) => setSt("highlight", e.target.value)} /><//>

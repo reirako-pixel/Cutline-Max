@@ -262,6 +262,10 @@
     .style-chip { padding: 4px; display: grid; gap: 3px; justify-items: center; font-size: 10.5px; color: var(--muted); }
     .style-chip:hover { color: var(--text); }
     .style-swatch { width: 84px; height: 46px; border-radius: 4px; background: repeating-conic-gradient(#3a3f4a 0 25%, #2c3038 0 50%) 0 0 / 12px 12px; }
+    .line-colors { display: grid; gap: 6px; margin: 8px 0 4px; }
+    .line-color { display: grid; grid-template-columns: minmax(0, 1fr) 64px 58px; gap: 8px; align-items: center; }
+    .line-color input[type=color] { height: 28px; }
+    .line-color > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .fit-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 4px 0 2px; }
     .fit-row button { display: flex; gap: 6px; align-items: center; justify-content: center; }
     .viz-busy { font-weight: 400; margin-left: 8px; display: inline-flex; gap: 6px; align-items: center; }

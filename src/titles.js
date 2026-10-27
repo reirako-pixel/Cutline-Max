@@ -145,14 +145,92 @@ function styled(c, s, x, y, size, w, tFill, tStroke, tSw, karaokeAt) {
   c.restore();
 }
 
+// ---------- per-line size and colour (Style tab) ----------
+
+/** Which of the title's lines a run of text is (-1: not one of them, e.g. a fixed label). */
+function lineIndex(s) {
+  const lines = CUR?.T?.lines;
+  return lines && s && s.trim() ? lines.indexOf(s) : -1;
+}
+/** The current transform relative to the title's anchor (what drawTitle started with). */
+const rel = (c) => CUR.root.inverse().multiply(c.getTransform());
+
+/** Measuring pass: where each line sits (in the title's own pixels) before any change. */
+function recordLine(c, li, s, x, y, sp, size, align) {
+  if (CUR.lay.rec[li]) return;
+  c.letterSpacing = `${(sp * size).toFixed(2)}px`;
+  const w = Math.max(0, c.measureText(s).width - sp * size);
+  c.letterSpacing = "0px";
+  const x0 = align === "center" ? x - w / 2 : align === "right" ? x - w : x;
+  const M = rel(c);
+  CUR.lay.rec[li] = { x0: M.a * x0 + M.c * y + M.e, y: M.b * x0 + M.d * y + M.f, w: w * Math.abs(M.a || 1), h: size * Math.abs(M.d || 1) };
+}
+
+/** From the measured lines: each line's move (dy) and size factor f, in the title's pixels. */
+function computeLayout(rec, T) {
+  const ids = Object.keys(rec).map(Number);
+  const f = (i) => Math.max(0.1, T.lineScale?.[i] || 1);
+  const out = {};
+  for (const j of ids) {
+    // A line that grows pushes the lines below it down and the lines above it up, so they never overlap.
+    let dy = 0;
+    for (const i of ids) {
+      if (i === j || Math.abs(rec[i].y - rec[j].y) < 1) continue;
+      dy += (rec[i].y < rec[j].y ? 1 : -1) * (f(i) - 1) * rec[i].h * 0.55;
+    }
+    out[j] = { dy, f: f(j) };
+  }
+  return out;
+}
+
+/**
+ * Draws one line resized and moved as the layout says. It grows from its anchor: centred lines from the middle,
+ * left-aligned ones (lower thirds) from their left edge, so they never slide under a bar beside them.
+ */
+function laidOut(c, s, x, y, o, p) {
+  const { sp = 0, size = 10 } = o;
+  const M = rel(c), d = M.d || 1;
+  c.letterSpacing = `${(sp * size).toFixed(2)}px`;
+  const w = Math.max(0, c.measureText(s).width - sp * size);
+  c.letterSpacing = "0px";
+  c.save();
+  c.translate(0, p.dy / d);
+  c.translate(x, y); c.scale(p.f, p.f); c.translate(-x, -y);
+  plain(c, s, x, y, o, lineIndex(s));
+  c.restore();
+  return w * p.f;
+}
+
+/** How a line is laid out now (size factor f and vertical move dy, in the template's own units), for decorations that follow it. */
+function lineLayout(c, li) {
+  const p = CUR?.lay?.lines?.[li];
+  if (!p) return { f: 1, dy: 0 };
+  return { f: p.f, dy: p.dy / (rel(c).d || 1) };
+}
+
 /** Fills (and optionally strokes first) text with letter spacing `sp` (em). `deco`: a decorative copy (shadow, extrusion) that a custom fill replaces. */
-function text(c, s, x, y, { sp = 0, size = 10, fill, stroke, sw = 0, align = "center", base = "middle", deco = false } = {}) {
+function text(c, s, x, y, o = {}) {
+  const li = lineIndex(s), lay = CUR?.lay;
+  if (li >= 0 && lay) {
+    if (lay.measure) recordLine(c, li, s, x, y, o.sp || 0, o.size || 10, o.align || "center");
+    else if (lay.lines[li]) return laidOut(c, s, x, y, o, lay.lines[li]);
+  }
+  return plain(c, s, x, y, o, li);
+}
+
+function plain(c, s, x, y, { sp = 0, size = 10, fill, stroke, sw = 0, align = "center", base = "middle", deco = false } = {}, li = -1) {
+  // A colour picked for this line (Style tab) replaces the template's colour for it.
+  const col = li >= 0 ? CUR?.T?.lineColor?.[li] : null;
+  if (col && fill && !deco) fill = col;
   c.letterSpacing = `${(sp * size).toFixed(2)}px`;
   c.textAlign = align; c.textBaseline = base; c.lineJoin = "round";
   // Canvas adds the spacing after the last letter too; nudge centred / right-aligned text back by half / all of it.
   const fix = align === "center" ? (sp * size) / 2 : align === "right" ? sp * size : 0;
   const w = Math.max(0, c.measureText(s).width - sp * size);
-  const L = CUR?.look;
+  let L = CUR?.look;
+  if (L && col && L.fill?.type && L.fill.type !== "template" && L.fill.type !== "karaoke") L = { ...L, fill: { type: "solid", c1: col } };
+  const saved = CUR?.look;
+  if (CUR && L !== saved) CUR.look = L;
   if (!L) {
     if (stroke && sw > 0) { c.strokeStyle = stroke; c.lineWidth = sw; c.strokeText(s, x + fix, y); }
     if (fill) { c.fillStyle = fill; c.fillText(s, x + fix, y); }
@@ -161,6 +239,7 @@ function text(c, s, x, y, { sp = 0, size = 10, fill, stroke, sw = 0, align = "ce
   } else if (!fill) {
     if (!L.stroke?.on && stroke && sw > 0) { c.strokeStyle = stroke; c.lineWidth = sw; c.strokeText(s, x + fix, y); }
   } else styled(c, s, x + fix, y, size, w, fill, stroke, sw);
+  if (CUR) CUR.look = saved;
   c.letterSpacing = "0px";
   return w;
 }
@@ -204,10 +283,11 @@ export const TITLE_TEMPLATES = [
       c.globalAlpha *= q;
       font(c, F.mont, 600, 34 * k);
       const w = text(c, line(T, 1), 0, 120 * k + (1 - q) * 20 * k, { sp: 0.42, size: 34 * k, fill: T.colorA });
+      const sub = lineLayout(c, 1); // the side lines follow the subtitle when it's resized
       c.fillStyle = T.colorB;
-      const lw = 140 * k * q;
-      c.fillRect(-w / 2 - 30 * k - lw, 118 * k, lw, 3 * k);
-      c.fillRect(w / 2 + 30 * k, 118 * k, lw, 3 * k);
+      const lw = 140 * k * q * sub.f;
+      c.fillRect(-w / 2 - 30 * k * sub.f - lw, 118 * k + sub.dy, lw, 3 * k * sub.f);
+      c.fillRect(w / 2 + 30 * k * sub.f, 118 * k + sub.dy, lw, 3 * k * sub.f);
     },
   }],
   ["credit", "Credit", "titles", {
@@ -418,6 +498,7 @@ export const TITLE_TEMPLATES = [
     },
   }],
   ["headline", "Headline boxes", "social", {
+    boxed: true,
     lines: ["TODAY'S", "HEADLINES"], labels: ["Label", "Headline"], colors: ["#e8222e", "#ffffff"], colorLabels: ["Label box", "Headline box"], font: F.anton,
     draw(c, T, lt, dur, k) {
       const p = phase(T, lt, dur, 0.9, 0.5);
@@ -482,6 +563,7 @@ export const TITLE_TEMPLATES = [
     },
   }],
   ["flash", "Flash sale", "social", {
+    boxed: true,
     lines: ["FLASH SALE", "UP TO 50% OFF"], labels: ["Title", "Tag"], colors: ["#7b2bff", "#ff2bd6"], colorLabels: ["Colour 1", "Colour 2"], font: F.archivo,
     draw(c, T, lt, dur, k) {
       const p = phase(T, lt, dur, 0.7, 0.4);
@@ -509,6 +591,7 @@ export const TITLE_TEMPLATES = [
     },
   }],
   ["comic", "Comic burst", "social", {
+    boxed: true,
     lines: ["DOES IT", "REALLY WORK?"], labels: ["Line 1", "Line 2"], colors: ["#ffcf24", "#ff7a1a"], colorLabels: ["Rays", "Rays 2"], font: F.bangers,
     draw(c, T, lt, dur, k) {
       const p = phase(T, lt, dur, 0.5, 0.4);
@@ -594,6 +677,7 @@ export const TITLE_TEMPLATES = [
     },
   }],
   ["lt-box", "Lower third: boxes", "lower", {
+    boxed: true,
     lines: ["YOUR NAME", "Your title or role"], labels: ["Name", "Role"], colors: ["#e8222e", "#14141a"], colorLabels: ["Name box", "Role box"], font: F.mont, pos: [0.08, 0.82],
     draw(c, T, lt, dur, k) {
       const p = phase(T, lt, dur, 0.9, 0.45);
@@ -632,6 +716,7 @@ export const TITLE_TEMPLATES = [
     },
   }],
   ["lt-corp", "Lower third: corporate", "lower", {
+    boxed: true,
     lines: ["UPPER TEXT", "Lower text goes here"], labels: ["Upper", "Lower"], colors: ["#d7263d", "#ffffff"], colorLabels: ["Upper bar", "Lower bar"], font: F.mont, pos: [0.08, 0.84],
     draw(c, T, lt, dur, k) {
       const p = phase(T, lt, dur, 0.9, 0.45);
@@ -672,11 +757,26 @@ export function titleFonts(T) {
 }
 
 /** Draws title settings T at local time lt of a clip lasting dur; origin at the anchor, k = frame width / 1920. */
+let MCTX;
 export function drawTitle(c, T, lt, dur, k) {
+  const tpl = titleTemplate(T.tpl)[3];
+  let lay = null;
+  // Per-line sizes: measure where the template puts each line, then lay them out again.
+  if (!tpl.boxed && T.lineScale?.some((v) => v && v !== 1)) {
+    MCTX ??= new OffscreenCanvas(8, 8).getContext("2d");
+    MCTX.setTransform(1, 0, 0, 1, 0, 0);
+    const rec = {};
+    CUR = { look: T.look || null, lt, dur, k, T, lay: { measure: true, rec }, root: MCTX.getTransform() };
+    MCTX.save();
+    try { tpl.draw(MCTX, T, lt, dur, k); } catch { /* measuring only */ } finally { MCTX.restore(); }
+    lay = { lines: computeLayout(rec, T) };
+  }
   c.save();
-  CUR = T.look ? { look: T.look, lt, dur, k } : null;
-  try { titleTemplate(T.tpl)[3].draw(c, T, lt, dur, k); } finally { CUR = null; c.restore(); }
+  CUR = { look: T.look || null, lt, dur, k, T, lay, root: c.getTransform() };
+  try { tpl.draw(c, T, lt, dur, k); } finally { CUR = null; c.restore(); }
 }
+/** Templates whose text sits in fixed boxes: per-line sizes would break them. */
+export const titleIsBoxed = (id) => !!titleTemplate(id)[3].boxed;
 
 /** Draws "Aa" in a style, for the Style tab's preset swatches (t: time, so karaoke shows half sung). */
 export function drawStyleSample(c, look, W, H, t = 1.5) {
@@ -684,7 +784,7 @@ export function drawStyleSample(c, look, W, H, t = 1.5) {
   c.clearRect(0, 0, W, H);
   const size = H * 0.62;
   font(c, F.mont, 800, size);
-  CUR = { look, lt: t, dur: 3, k: H / 70 };
+  CUR = { look, lt: t, dur: 3, k: H / 70, T: null, lay: null };
   try { text(c, "Aa", W / 2, H / 2 + size * 0.04, { size, fill: "#ffffff" }); } finally { CUR = null; }
 }
 
@@ -697,7 +797,7 @@ let mctx;
  * finished: { x0, y0, x1, y1 } in 1920-wide pixels. Cached per title content.
  */
 export function titleBox(T) {
-  const key = JSON.stringify([T.tpl, T.lines, T.font, T.look]);
+  const key = JSON.stringify([T.tpl, T.lines, T.font, T.look, T.lineScale]);
   const hit = boxCache.get(key);
   if (hit) return hit;
   const S = 2400, H = 1600;
