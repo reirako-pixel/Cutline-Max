@@ -28,6 +28,7 @@ import { ShapeFields, shapeName } from "./shapes.js";
 import { VizFields, BeatSyncSection } from "./visualizer.js";
 import { TitleFields, TitleStyleFields } from "./titles.js";
 import { RichText } from "./richtext.js";
+import { TextStylePresets, KaraokeSection, TextGlowSection, setStyleOf, joinIntoKaraoke } from "./karaoke.js";
 import { titleName } from "../titles.js";
 import { vizStyleName } from "../vizdraw.js";
 
@@ -800,7 +801,12 @@ function TextInspectorBody({ t }) {
         <${KSlider} kind="text" id=${t.id} path="opacity" label="Opacity" min=${0} max=${1} fallback=${1} format=${pct} />
       <//>`}
     ${tab === "style" && html`
-      <${TextLookFields} st=${st} setSt=${setSt} />
+      <${TextStylePresets} st=${st} setStyle=${setStyleOf(allCaptions ? new Set(getState().project.texts.filter((x) => x.caption).map((x) => x.id)) : new Set([t.id]))} />
+      <${KaraokeSection} t=${t} st=${st} setSt=${setSt} />
+      <${Section} title="Size, colour & outline">
+        <${TextLookFields} st=${st} setSt=${setSt} />
+      <//>
+      <${TextGlowSection} st=${st} setSt=${setSt} />
       ${t.caption && html`<button class="wide" onClick=${applyAll} title="Copies this caption's whole style, position and animation to every caption">Copy this whole look to all captions</button>`}`}
     ${tab === "animate" && html`<${AnimateSection} kind="text" item=${t} textOnly
       onAnim=${allCaptions ? setAnimOn(new Set(getState().project.texts.filter((x) => x.caption).map((x) => x.id))) : undefined}
@@ -822,7 +828,11 @@ function MultiTextFields({ texts }) {
   return html`<div class="multitext">
     <h3>Style for ${texts.length} ${label}</h3>
     ${differ.length > 0 && html`<p class="muted">They don't all share the same ${differ.join(", ")}; showing the first one's. Any change applies to all ${texts.length}.</p>`}
-    <${Tabs} tabs=${[["font", "Font & size"], ["look", "Colour & box"], ["anim", "Animation"], ["place", "Position"]]} tab=${tab} setTab=${setTab} />
+    <button class="wide" onClick=${() => joinIntoKaraoke(ids)} title="Make one text from these lines that shows 1–4 lines at a time, highlighting each word as it's sung">
+      <${Icon} n="mic-vocal" /> Join into one karaoke text</button>
+    <${Tabs} tabs=${[["font", "Font & size"], ["look", "Colour & box"], ["kara", "Lyrics & karaoke"], ["anim", "Animation"], ["place", "Position"]]} tab=${tab} setTab=${setTab} />
+    ${tab === "kara" && html`<${TextStylePresets} st=${st} setStyle=${setStyleOf(ids)} /><${KaraokeSection} t=${texts[0]} st=${st} setSt=${setSt} />
+      <${TextGlowSection} st=${st} setSt=${setSt} />`}
     ${tab === "anim" && html`<${AnimFields} textOnly anim=${texts[0].anim} onChange=${setAnimOn(ids)} />`}
     ${tab === "font" && html`<${TextFontFields} st=${st} setSt=${setSt} />`}
     ${tab === "look" && html`<${TextLookFields} st=${st} setSt=${setSt} />`}
@@ -859,10 +869,10 @@ function AutoLyrics({ item }) {
           : p.stage === "download" ? `Downloading the speech model (first time only)… ${Math.round(p.progress || 0)}%`
           : "Listening to the song… this takes a while (about as long as the song, or longer on the Better setting)",
       ));
-      const lines = wordsToLyrics(chunks, { karaoke: look === "karaoke", forId: item.id });
+      const lines = wordsToLyrics(chunks, { karaoke: look !== "plain", block: { karaoke2: 2, karaoke4: 4 }[look] || 1, forId: item.id });
       if (!lines.length) { setStatus("No singing was found in this clip. Try the Better accuracy, or check the language."); setBusy(false); return; }
       edit((p) => { p.texts = p.texts.filter((t) => t.lyricsFor !== item.id).concat(lines); });
-      setStatus(`Added ${lines.length} lyric lines in ${Math.round((performance.now() - started) / 1000)} s. Click a line on the timeline to fix its words; style changes can apply to all of them.`);
+      setStatus(`Added ${lines.length} lyric ${look === "karaoke2" || look === "karaoke4" ? "blocks" : "lines"} in ${Math.round((performance.now() - started) / 1000)} s. Click a line on the timeline to fix its words; style changes can apply to all of them.`);
     } catch (err) {
       setStatus("Couldn't make lyrics: " + err.message);
     }
@@ -883,7 +893,9 @@ function AutoLyrics({ item }) {
     <//>
     <${Field} label="Look">
       <select value=${look} disabled=${busy} onChange=${(e) => keep("cutline.lyricsLook", e.target.value, setLook)}>
-        <option value="karaoke">Karaoke: each word lights up as it's sung</option>
+        <option value="karaoke">Karaoke, one line at a time</option>
+        <option value="karaoke2">Karaoke, 2 lines on screen</option>
+        <option value="karaoke4">Karaoke, up to 4 lines on screen</option>
         <option value="plain">Plain lyric lines</option>
       </select>
     <//>

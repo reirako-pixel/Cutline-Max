@@ -266,6 +266,22 @@
     .line-color { display: grid; grid-template-columns: minmax(0, 1fr) 64px 58px; gap: 8px; align-items: center; }
     .line-color input[type=color] { height: 28px; }
     .line-color > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tp-sample { width: 84px; height: 46px; border-radius: 4px; display: grid; place-items: center; font: 800 24px Inter, Arial, sans-serif; paint-order: stroke fill;
+      background: repeating-conic-gradient(#3a3f4a 0 25%, #2c3038 0 50%) 0 0 / 12px 12px; }
+    .tp-sample .kara { background-image: linear-gradient(90deg, var(--sung) 52%, var(--unsung) 52%); -webkit-background-clip: text; background-clip: text; color: transparent; font-size: 21px; }
+    .pair-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 4px; margin: 6px 0; }
+    .pair-chip { padding: 4px 2px; display: grid; gap: 2px; justify-items: center; font-size: 10px; color: var(--muted); line-height: 1.15; text-align: center; }
+    .pair-chip.on { box-shadow: inset 0 0 0 1px var(--accent); color: var(--text); }
+    .pair-sample { font: 900 17px Inter, Arial, sans-serif; background: linear-gradient(90deg, var(--sung) 52%, var(--unsung) 52%); -webkit-background-clip: text; background-clip: text;
+      color: transparent; -webkit-text-stroke: 0.6px var(--ol); padding: 0 2px; }
+    .swatch-pick { margin: 4px 0; }
+    .swatch-pick .field { margin-bottom: 3px; }
+    .swatches { display: flex; flex-wrap: wrap; gap: 4px; }
+    .swatch { width: 20px; height: 20px; border-radius: 50%; padding: 0; border: 1px solid #0006; box-shadow: inset 0 0 0 1px #fff3; }
+    .swatch.on { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .kara-lines { display: flex; align-items: center; gap: 4px; margin: 6px 0; }
+    .kara-lines > span { flex: 1; font-size: 12px; }
+    .kara-lines .chip { min-width: 34px; padding: 4px 6px; }
     .title-align { display: flex; align-items: center; gap: 2px; margin: 6px 0 4px; }
     .title-align > span { flex: 1; }
     .title-align .ibtn { width: 34px; height: 30px; border-radius: 6px; }

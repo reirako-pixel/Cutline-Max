@@ -55,7 +55,7 @@ const noise = (w) => /^\s*[\[(♪♫*]/.test(w) || /^\s*(music|instrumental|appl
  * Words → lyric lines: a new line at a pause in the singing, at the end of a sentence, or when a line gets
  * long. karaoke: each word lights up as it's sung.
  */
-export function wordsToLyrics(chunks, { karaoke = true, forId } = {}) {
+export function wordsToLyrics(chunks, { karaoke = true, block = 1, forId } = {}) {
   const words = chunks
     .filter((c) => c.text?.trim() && c.timestamp?.[0] != null && !noise(c.text))
     .map((c) => ({ w: c.text, t0: c.timestamp[0], t1: c.timestamp[1] ?? c.timestamp[0] + 0.3 }));
@@ -68,19 +68,27 @@ export function wordsToLyrics(chunks, { karaoke = true, forId } = {}) {
     cur.push(w);
   }
   if (cur.length) lines.push(cur);
+  // Karaoke blocks: up to `block` lines shown together in one text (a long pause in the singing starts a new block).
+  const groups = [];
+  for (const line of lines) {
+    const g = groups[groups.length - 1];
+    if (g && g.length < block && line[0].t0 - g[g.length - 1][g[g.length - 1].length - 1].t1 < 3) g.push(line);
+    else groups.push([line]);
+  }
   const style = {
     ...defaultTextStyle(), size: 70, weight: 800, color: "#ffffff", stroke: "#000000", strokeWidth: 5,
-    shadow: { color: "#000000aa", blur: 10, x: 0, y: 4 }, highlight: karaoke ? "#3df2ff" : "#ffffff",
+    shadow: { color: "#000000aa", blur: 10, x: 0, y: 4 }, highlight: "#ffffff",
+    ...(karaoke ? { karaoke: { on: true, sung: "#3df2ff", unsung: "#ffffff", mode: "sweep", lines: Math.max(1, block) } } : {}),
   };
-  return lines.map((g, i) => {
-    g[0] = { ...g[0], w: g[0].w.trimStart() };
+  return groups.map((grp, i) => {
+    const g = grp.flatMap((line, li) => line.map((w, j) => (j ? { ...w } : { ...w, w: (li ? "\n" : "") + w.w.trimStart() })));
     const start = g[0].t0;
-    // Each line stays up until the next one starts (or a moment after its last word).
-    const next = lines[i + 1]?.[0]?.t0;
+    // Each block stays up until the next one starts (or a moment after its last word).
+    const next = groups[i + 1]?.[0]?.[0]?.t0;
     const end = Math.max(g[g.length - 1].t1 + 0.4, start + 0.6);
     return {
       id: uid(), caption: true, lyricsFor: forId, start, dur: (next != null ? Math.min(end, next) : end) - start,
-      text: g.map((w) => w.w).join(""), words: g, x: 0.5, y: 0.84, scale: 1, style: { ...style },
+      text: g.map((w) => w.w).join(""), words: g, x: 0.5, y: grp.length > 2 ? 0.75 : 0.84, scale: 1, style: structuredClone(style),
       anim: { in: { type: "fade", dur: 0.15 }, out: { type: "none", dur: 0.2 } },
     };
   });

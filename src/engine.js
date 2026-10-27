@@ -779,9 +779,12 @@ export function itemBounds(project, kind, item, W, H, t) {
   const size = st.size * (W / 1920);
   const m = measureCtx();
   m.font = textFont(st, size);
-  const lines = wrap(m, applyCase(item.text, st), wrapWidth(item, W));
+  const full = applyCase(item.words?.length ? item.words.map((w) => w.w).join("") : item.text, st);
+  const allLines = wrap(m, full, wrapWidth(item, W));
+  const [la, lb] = karaokeWindow(item, allLines, full, t ?? item.start);
+  const lines = allLines.slice(la, lb);
   const pad = st.bg ? size * (st.bgPad ?? 0.6) : size * 0.2;
-  const lay = textLayout(m, item, st, lines, size);
+  const lay = textLayout(m, item, st, lines, size, lineStarts(allLines)[la]);
   const tw = lay.maxW + pad;
   const th = lay.total + size * 0.2;
   const tr = t == null ? { x: item.x, y: item.y, scale: item.scale || 1, rotation: item.rotation || 0 } : transformAt(item, lt, true);
@@ -832,8 +835,13 @@ export function drawText(ctx, item, t, W, H) {
     : item.text.split(/(\s+)/).filter(Boolean).map((w) => ({ w }));
   let full = applyCase(words.map((w) => w.w).join(""), st);
   if (a.reveal < 1) full = full.slice(0, Math.round(full.length * a.reveal));
-  const lines = wrap(ctx, full, wrapWidth(item, W));
-  const lay = textLayout(ctx, item, st, lines, size);
+  const allLines = wrap(ctx, full, wrapWidth(item, W));
+  // Karaoke: words go from the unsung to the sung colour; only a few lines show at once, moving on as they're sung.
+  const kar = st.karaoke?.on ? st.karaoke : null;
+  const prog = kar ? karaokeProgress(item, full, t) : null;
+  const [la, lb] = karaokeWindow(item, allLines, full, t, prog);
+  const lines = allLines.slice(la, lb);
+  const lay = textLayout(ctx, item, st, lines, size, lineStarts(allLines)[la]);
   const { maxW, spacing, styles } = lay;
 
   if (st.bg) {
@@ -845,8 +853,10 @@ export function drawText(ctx, item, t, W, H) {
   }
 
   // Active caption word (karaoke-style highlight).
-  const activeWord = item.words?.findIndex((w) => t >= w.t0 && t < w.t1) ?? -1;
-  let charIndex = 0;
+  const activeWord = kar ? -1 : item.words?.findIndex((w) => t >= w.t0 && t < w.t1) ?? -1;
+  let charIndex = lineStarts(allLines)[la];
+  const glow = st.glow?.on ? st.glow : null;
+  const noShadow = () => { ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0; };
   const activeRange = activeWord >= 0
     ? (() => {
         let s = 0;
@@ -886,6 +896,12 @@ export function drawText(ctx, item, t, W, H) {
       // Bigger letters sit on the same baseline as the rest of the line.
       const cy = sc !== 1 ? y - size * 0.36 * (sc - 1) : y;
       const hl = activeRange && charIndex >= activeRange[0] && charIndex < activeRange[1];
+      if (glow && ch.trim()) { // outer glow: the letter blurred in the glow colour, under everything
+        ctx.shadowColor = glow.color || "#ffffff"; ctx.shadowBlur = (glow.size ?? 24) * (W / 1920); ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
+        ctx.fillStyle = glow.color || "#ffffff";
+        for (let g = 0; g < (glow.strength ?? 2); g++) ctx.fillText(ch, x, cy);
+        noShadow();
+      }
       setShadow(true);
       if (st.strokeWidth > 0) {
         ctx.strokeStyle = st.stroke;
@@ -893,9 +909,19 @@ export function drawText(ctx, item, t, W, H) {
         ctx.strokeText(ch, x, cy);
         setShadow(false);
       }
-      ctx.fillStyle = hl ? st.highlight : own?.color || st.color;
-      ctx.fillText(ch, x, cy);
+      const p = prog ? prog(charIndex) : 0;
+      ctx.fillStyle = kar ? own?.color || kar.unsung || "#ffffff" : hl ? st.highlight : own?.color || st.color;
+      if (!(kar && p >= 1)) ctx.fillText(ch, x, cy);
       setShadow(false);
+      if (kar && p > 0 && ch.trim()) { // the sung part of the letter (all of it, or the left part while the sweep crosses it)
+        ctx.save();
+        if (p < 1) { ctx.beginPath(); ctx.rect(x - size, cy - size * sc * 1.5, size + cw * p, size * sc * 3); ctx.clip(); }
+        if (kar.sungOutline && st.strokeWidth > 0) { ctx.strokeStyle = kar.sungOutline; ctx.lineWidth = st.strokeWidth * (W / 1920) * 2; ctx.strokeText(ch, x, cy); }
+        if (kar.glow) { ctx.shadowColor = kar.sung || "#3df2ff"; ctx.shadowBlur = size * 0.3; }
+        ctx.fillStyle = kar.sung || "#3df2ff";
+        ctx.fillText(ch, x, cy);
+        ctx.restore();
+      }
       if (sc !== 1) ctx.font = textFont(st, size);
       x += cw + spacing;
       charIndex += ch.length;
@@ -909,13 +935,13 @@ export function drawText(ctx, item, t, W, H) {
  * Line widths and heights of a text, allowing for parts with their own size (item.spans): a line with bigger
  * letters is taller, and the block is centred on the text's position. ctx must have the text's font set.
  */
-function textLayout(ctx, item, st, lines, size) {
+function textLayout(ctx, item, st, lines, size, startIdx = 0) {
   const spacing = (st.letterSpacing || 0) * size;
   const lh = size * (st.lineHeight || 1.2);
-  const n = lines.reduce((acc, l) => acc + l.length + 1, 0);
+  const n = startIdx + lines.reduce((acc, l) => acc + l.length + 1, 0);
   const styles = item.spans?.length && !item.words?.length ? charStyles(item.spans, n) : null;
   const widths = [], heights = [];
-  let idx = 0;
+  let idx = startIdx;
   for (const l of lines) {
     let w = 0, maxSc = 1, count = 0;
     if (!styles) w = ctx.measureText(l).width;
@@ -939,6 +965,70 @@ function textLayout(ctx, item, st, lines, size) {
   let acc = top;
   for (const h of heights) { ys.push(acc + h / 2 + (h - lh) * 0.18); acc += h; }
   return { lh, spacing, styles, widths, heights, total, top, ys, maxW: Math.max(0, ...widths) };
+}
+
+/** Index in the text of each wrapped line's first letter (wrapping and Enter each use up one character). */
+function lineStarts(lines) {
+  const out = [];
+  let i = 0;
+  for (const l of lines) { out.push(i); i += l.length + 1; }
+  out.push(i);
+  return out;
+}
+
+/**
+ * Karaoke timing: a function giving how much of the letter at index i is sung at time t (0–1).
+ * Captions and auto lyrics use their word timing; other texts spread the words evenly over the text's time
+ * (after an optional lead-in, ending a little before the text does).
+ */
+export function karaokeProgress(item, full, t) {
+  const k = item.style.karaoke || {};
+  const n = full.length;
+  const s = new Float64Array(n).fill(Infinity), e = new Float64Array(n).fill(Infinity), w0 = new Float64Array(n).fill(Infinity);
+  if (item.words?.length) {
+    let off = 0;
+    for (const w of item.words) {
+      const lead = w.w.length - w.w.trimStart().length, body = w.w.trim().length;
+      for (let i = 0; i < body && off + lead + i < n; i++) {
+        const j = off + lead + i;
+        s[j] = w.t0 + ((w.t1 - w.t0) * i) / body; e[j] = w.t0 + ((w.t1 - w.t0) * (i + 1)) / body; w0[j] = w.t0;
+      }
+      off += w.w.length;
+    }
+  } else {
+    const a = item.start + Math.min(Math.max(0, k.lead || 0), item.dur * 0.9);
+    const b = Math.max(a + 0.1, item.start + item.dur - Math.max(0, k.tail ?? 0.3));
+    const letters = [...full].filter((ch) => ch.trim()).length || 1;
+    const step = (b - a) / letters;
+    let c = 0, wordStart = a;
+    for (let j = 0; j < n; j++) {
+      if (!full[j].trim()) { wordStart = a + c * step; continue; }
+      if (j === 0 || !full[j - 1].trim()) wordStart = a + c * step;
+      s[j] = a + c * step; e[j] = a + (c + 1) * step; w0[j] = wordStart; c++;
+    }
+  }
+  const word = k.mode === "word";
+  return (i) => (i < 0 || i >= n ? 0 : word ? (t >= w0[i] ? 1 : 0) : Math.min(1, Math.max(0, (t - s[i]) / Math.max(1e-3, e[i] - s[i]))));
+}
+
+/**
+ * Which wrapped lines [from, to) a karaoke text shows at time t: up to `lines` (1–4) at once, page by page
+ * or one line at a time, following the line being sung. Other texts show every line.
+ */
+function karaokeWindow(item, lines, full, t, prog) {
+  const k = item.style.karaoke;
+  const N = k?.on ? k.lines || 0 : 0;
+  if (!N || lines.length <= N) return [0, lines.length];
+  const p = prog || karaokeProgress(item, full, t);
+  const starts = lineStarts(lines);
+  let cur = lines.length - 1;
+  for (let li = 0; li < lines.length; li++) {
+    let done = true;
+    for (let i = starts[li]; i < starts[li] + lines[li].length; i++) if (full[i]?.trim() && p(i) < 1) { done = false; break; }
+    if (!done) { cur = li; break; }
+  }
+  const from = k.scroll ? Math.min(cur, lines.length - N) : Math.floor(cur / N) * N;
+  return [from, Math.min(lines.length, from + N)];
 }
 
 /**

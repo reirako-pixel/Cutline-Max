@@ -6,6 +6,7 @@ import { TITLE_TEMPLATES, TITLE_CATEGORIES, titleTemplate, newTitle, titlePos, t
 import { FONTS, loadFont } from "./fonts.js";
 import { html, Field, Section, Slider, KSlider, Icon } from "./kit.js";
 import { RichText } from "./richtext.js";
+import { KARAOKE_PAIRS, SUNG_SWATCHES, UNSUNG_SWATCHES, SwatchPicker, PairChip } from "./karaoke.js";
 import { setting } from "../settings.js";
 
 // Text measured before a web font arrives has the wrong width: measure again once fonts load.
@@ -135,7 +136,7 @@ export function TitleFields({ t }) {
 
 const solid = (c1) => ({ fill: { type: "solid", c1 } });
 const grad = (c1, c2, angle = 90) => ({ fill: { type: "gradient", c1, c2, angle } });
-const karaoke = (c1, outline) => ({ fill: { type: "karaoke", c1, c2: "#ffffff" }, stroke: { on: true, color: outline, width: 6, blur: 0 },
+const karaoke = (c1, outline, c2 = "#ffffff") => ({ fill: { type: "karaoke", c1, c2 }, stroke: { on: true, color: outline, width: 6, blur: 0 },
   shadow: { on: true, color: "#000000", opacity: 0.5, angle: 90, dist: 4, blur: 6 }, glow: { on: false } });
 /** Preset groups. Each preset only replaces the parts it names (fill / stroke / shadow / glow), so they combine. */
 export const STYLE_PRESETS = [
@@ -150,7 +151,7 @@ export const STYLE_PRESETS = [
     ["Lyrics soft", { ...solid("#ffffff"), stroke: { on: false }, shadow: { on: false }, glow: { on: true, color: "#000000", size: 22, strength: 3 } }],
     ["Lyrics neon", { ...solid("#ffffff"), stroke: { on: false }, shadow: { on: false }, glow: { on: true, color: "#ff3cac", size: 26, strength: 2 } }],
     ["Lyrics yellow", { ...solid("#ffe14d"), stroke: { on: true, color: "#1a1a1a", width: 6, blur: 0 }, shadow: { on: false }, glow: { on: false } }],
-    ["Karaoke blue", karaoke("#3df2ff", "#0a1a3a")], ["Karaoke pink", karaoke("#ff3cac", "#2a0a1e")], ["Karaoke gold", karaoke("#ffd23f", "#2b1a00")],
+    ...KARAOKE_PAIRS.map(([name, sung, unsung, outline]) => [`Karaoke ${{ Cyan: "blue", Pink: "pink", Gold: "gold" }[name] || name.toLowerCase()}`, karaoke(sung, outline, unsung)]),
   ]],
   ["Outlines", [
     ["None", { stroke: { on: false } }], ["Thin black", { stroke: { on: true, color: "#000000", width: 3, blur: 0 } }],
@@ -248,7 +249,13 @@ export function TitleStyleFields({ t }) {
         <select value=${fill.texture || "gold"} onChange=${(e) => put("fill", "texture", e.target.value)}>
           ${TEXTURE_NAMES.map(([id, name]) => html`<option key=${id} value=${id}>${name}</option>`)}
         </select><//>`}
-      ${ftype === "karaoke" && html`<div class="grid2">${colour("fill", "c1", "Sung", "#3df2ff")}${colour("fill", "c2", "Not sung yet", "#ffffff")}</div>
+      ${ftype === "karaoke" && html`<div class="pair-grid">
+          ${KARAOKE_PAIRS.map(([name, sung, unsung, outline]) => html`<${PairChip} key=${name} name=${name} sung=${sung} unsung=${unsung} outline=${outline}
+            on=${(fill.c1 || "").toLowerCase() === sung && (fill.c2 || "").toLowerCase() === unsung}
+            onClick=${() => set((l) => (l.fill = { ...(l.fill || {}), type: "karaoke", c1: sung, c2: unsung }))} />`)}
+        </div>
+        <${SwatchPicker} label="Sung" value=${fill.c1 || "#3df2ff"} colors=${SUNG_SWATCHES} onPick=${(c) => put("fill", "c1", c)} />
+        <${SwatchPicker} label="Not sung yet" value=${fill.c2 || "#ffffff"} colors=${UNSUNG_SWATCHES} onPick=${(c) => put("fill", "c2", c)} />
         <p class="muted small">The sung colour sweeps across the words during the title's time on the timeline: trim the title to the line's length (Match audio length helps).</p>`}
     <//>
     <${Section} title="Outline">
