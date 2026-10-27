@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useStore, edit, editLive, findItem, getState } from "../store.js";
 import { clipSpeed } from "../engine.js";
 import { deleteSelection, pasteSettings, copySelection, duplicateSelection, mergeClips, setClipSpeed, SPEED_PRESETS } from "../actions.js";
-import { ADJUST, FILTERS, EFFECTS, EFFECT_CATEGORIES } from "../fx.js";
+import { ADJUST, FILTERS, EFFECTS, EFFECT_CATEGORIES, newFx } from "../fx.js";
 import { VOICE_EFFECTS } from "../audiofx.js";
 import { uid } from "../store.js";
 import { applyAudioPreset, applyAdjustPreset, saveAudioPreset, saveClipLookPreset } from "../presets.js";
@@ -134,7 +134,7 @@ function MultiAdjust({ targets, items }) {
     <//>
     <${Section} title="Effects">
       <${Field} label="Add an effect to all">
-        <select value="" onChange=${(e) => { const type = e.target.value; if (type) editAll(targets, (it) => (it.fx = [...(it.fx || []), { id: uid(), type, amount: 0.7 }])); }}>
+        <select value="" onChange=${(e) => { const type = e.target.value; if (type) editAll(targets, (it) => (it.fx = [...(it.fx || []), newFx(type, uid)])); }}>
           <option value="">Choose…</option>
           ${EFFECT_CATEGORIES.map((cat, ci) => html`<optgroup label=${cat}>
             ${Object.entries(EFFECTS).filter(([, d]) => d.cat === ci).map(([k, d]) => html`<option value=${k}>${d.label}</option>`)}

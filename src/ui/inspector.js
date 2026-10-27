@@ -6,8 +6,9 @@ import {
   pause, deleteSelection, rippleDelete, copySelection, duplicateSelection, setClipSpeed, SPEED_PRESETS, freezeFrame,
   mergeClips, detachAudio, applyFilter, toast, setAnimatable, toggleKeyframe, localTime, mirrorSelection,
   setTextSound, soundToAll, toggleAllKeyframes, allKeyedHere, matchAudioLength, audioUnder, fitToFrame,
+  MOTION_PRESETS, applyMotionPreset,
 } from "../actions.js";
-import { ADJUST, FILTERS, EFFECTS, EFFECT_CATEGORIES } from "../fx.js";
+import { ADJUST, FILTERS, EFFECTS, EFFECT_CATEGORIES, newFx, fxParams } from "../fx.js";
 import { VOICE_EFFECTS } from "../audiofx.js";
 import { cutoutStatus, loadCutout } from "../segment.js";
 import { uid } from "../store.js";
@@ -268,6 +269,29 @@ export function AdjustSection({ kind, item }) {
   <//>`;
 }
 
+/** An effect's speed, its own sliders (colour, texture…), quick presets and the VCR display switch. */
+function FxExtras({ kind, item, f }) {
+  const def = EFFECTS[f.type];
+  if (!def) return null;
+  const live = liveSet(kind, item.id);
+  const upd = (fn, isLive) => live((it) => { const x = (it.fx || []).find((y) => y.id === f.id); if (x) fn(x); }, isLive);
+  const vals = fxParams(f);
+  return html`<div class="fx-extras">
+    ${def.presets && html`<div class="fx-presets">${def.presets.map((pr) => html`<button key=${pr.label} class="chip" title="Set this effect's sliders to the preset"
+      onClick=${() => edit((p) => {
+        const it = findItem(p, kind, item.id); const x = it?.fx?.find((y) => y.id === f.id); if (!x) return;
+        x.amount = pr.amount; x.speed = pr.speed; x.p = [...pr.p];
+        if (it.keyframes) delete it.keyframes[`fx.${f.id}.amount`];
+      })}>${pr.label}</button>`)}</div>`}
+    <${Slider} label="Speed" value=${f.speed ?? 1} min=${0} max=${4} step=${0.05} format=${(v) => `${v.toFixed(2)}×`}
+      onChange=${(v, l) => upd((x) => (x.speed = v), l)} />
+    ${(def.params || []).map((d, i) => html`<${Slider} key=${d.label} label=${d.label} value=${vals[i]} min=${0} max=${1} step=${0.01} format=${pct}
+      onChange=${(v, l) => upd((x) => { x.p = fxParams(x); x.p[i] = v; }, l)} />`)}
+    ${def.hud && html`<label class="check"><input type="checkbox" checked=${f.hud !== false}
+      onChange=${(e) => upd((x) => (x.hud = e.target.checked))} /> Show PLAY, battery, tape counter and date</label>`}
+  </div>`;
+}
+
 export function EffectsSection({ kind, item }) {
   const fx = item.fx || [];
   const set = (fn) => edit((p) => fn(findItem(p, kind, item.id)));
@@ -287,9 +311,10 @@ export function EffectsSection({ kind, item }) {
         </span>
       </div>
       <${KSlider} kind=${kind} id=${item.id} path=${`fx.${f.id}.amount`} label="Amount" min=${0} max=${1} fallback=${f.amount ?? 1} format=${pct} />
+      <${FxExtras} kind=${kind} item=${item} f=${f} />
     </div>`)}
     <${Field} label="Add effect">
-      <select value="" onChange=${(e) => { const type = e.target.value; if (type) set((it) => (it.fx = [...(it.fx || []), { id: uid(), type, amount: 0.7 }])); }}>
+      <select value="" onChange=${(e) => { const type = e.target.value; if (type) set((it) => (it.fx = [...(it.fx || []), newFx(type, uid)])); }}>
         <option value="">Choose…</option>
         ${EFFECT_CATEGORIES.map((cat, ci) => html`<optgroup label=${cat}>
           ${Object.entries(EFFECTS).filter(([, d]) => d.cat === ci).map(([k, d]) => html`<option value=${k}>${d.label}</option>`)}
@@ -311,13 +336,18 @@ function CutoutSection({ kind, item }) {
     } catch { /* cancelled */ }
   };
   return html`<div>
-    <${Section} title="Remove background (people)">
+    <${Section} title="Remove or blur background (people)">
       <p class="muted">Finds people in each frame and removes everything else. Runs on your computer; the model (~250 KB) downloads once.</p>
       <label class="check"><input type="checkbox" checked=${item.cutout?.mode === "person"}
         onChange=${(e) => { set((s) => (s.cutout = e.target.checked ? { mode: "person", feather: 2 } : undefined)); if (e.target.checked) loadCutout(); }} /> Remove background</label>
+      ${!item.cutout?.mode && html`<button class="card-big" title="Find the person and blur everything behind them"
+        onClick=${() => { set((s) => (s.cutout = { mode: "person", feather: 3, bgBlur: 0.5 })); loadCutout(); }}><${Icon} n="aperture" /> Portrait blur (blur the background)</button>`}
       ${item.cutout?.mode && html`
         ${status === "loading" && html`<p class="status">Loading the model…</p>`}
         ${status === "failed" && html`<p class="error">Couldn't load the model. Check your connection and toggle it again.</p>`}
+        <${Slider} label="Blur background (portrait)" value=${item.cutout.invert ? 0 : item.cutout.bgBlur || 0} min=${0} max=${1} step=${0.01} format=${(v) => (v ? pct(v) : "Off")}
+          onChange=${(v, live) => set((s) => (s.cutout = { ...s.cutout, bgBlur: v, invert: false }), live)} />
+        <p class="muted small">Keeps the background but blurs it behind the person, like a phone's portrait mode.</p>
         <label class="check"><input type="checkbox" checked=${!!item.cutout.invert}
           onChange=${(e) => set((s) => (s.cutout = { ...s.cutout, invert: e.target.checked }))} /> Invert (remove the person, keep the background)</label>
         <${Slider} label="Edge softness" value=${item.cutout.feather ?? 2} min=${0} max=${10} step=${0.5} format=${(v) => v.toFixed(1)}
@@ -412,6 +442,18 @@ function AnimateSection({ kind, item, textOnly, onAnim, note }) {
   </div>`;
 }
 
+/** One-click slow zoom / pan over the clip (great for photos and still footage). */
+function MotionSection({ kind, item }) {
+  const moving = ["x", "y", "scale", "rotation"].some((k) => item.keyframes?.[k]?.length);
+  return html`<${Section} title="Slow zoom & pan" open=${false}>
+    <p class="muted small">Moves the picture slowly over the whole clip, so still images and footage feel alive. Made of keyframes, so you can fine-tune it.</p>
+    <div class="kb-presets">
+      ${Object.entries(MOTION_PRESETS).map(([k, m]) => html`<button key=${k} onClick=${() => applyMotionPreset(kind, item.id, k)}><${Icon} n=${m.icon} /> ${m.label}</button>`)}
+    </div>
+    ${moving && html`<button class="mini" style=${{ marginTop: "6px" }} onClick=${() => applyMotionPreset(kind, item.id, null)}>Remove zoom & pan keyframes</button>`}
+  <//>`;
+}
+
 function VisualInspector({ kind, item, project }) {
   const [tab, setTab] = useState("video");
   const [sub, setSub] = useState("basic");
@@ -431,6 +473,7 @@ function VisualInspector({ kind, item, project }) {
       <${Seg} items=${[["basic", "Basic"], ["removebg", "Remove BG"], ["mask", "Mask"], ["effects", "Effects"], ["beat", "Beat sync"]]} value=${sub} onChange=${setSub} />
       ${sub === "basic" && html`
         <${TransformSection} kind=${kind} id=${item.id} />
+        <${MotionSection} kind=${kind} item=${item} />
         <${BlendSection} kind=${kind} item=${item} />
         <${LookSection} kind=${kind} item=${item} />
         <${SourceSection} kind=${kind} item=${item} media=${media} />

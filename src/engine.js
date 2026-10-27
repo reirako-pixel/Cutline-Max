@@ -350,7 +350,7 @@ export function fxSettingsAt(item, lt) {
   const s = {
     adjust,
     filter: item.filter?.type ? { type: item.filter.type, amount: propAt(item, "filter.amount", lt, 1) } : null,
-    fx: (item.fx || []).map((f) => ({ type: f.type, amount: propAt(item, `fx.${f.id}.amount`, lt, 1) })),
+    fx: (item.fx || []).map((f) => ({ type: f.type, amount: propAt(item, `fx.${f.id}.amount`, lt, 1), speed: f.speed, p: f.p, hud: f.hud })),
     chroma: item.chroma,
   };
   return hasFx(s) ? s : null;
@@ -391,7 +391,19 @@ function drawVisual(ctx, project, item, lt, W, H) {
   };
   const sx = crop.l * sw, sy = crop.t * sh;
   const cw = sw * (1 - crop.l - crop.r), ch = sh * (1 - crop.t - crop.b);
-  const draw = (c) => { if (cw > 0.5 && ch > 0.5) c.drawImage(src, sx, sy, cw, ch, (-sw * fit) / 2 + sx * fit, (-sh * fit) / 2 + sy * fit, cw * fit, ch * fit); };
+  // Portrait mode: the person cut out sharp over the same frame blurred behind them.
+  const bgBlur = item.cutout?.mode && !item.cutout.invert && src !== el ? item.cutout.bgBlur || 0 : 0;
+  const draw = (c) => {
+    if (!(cw > 0.5 && ch > 0.5)) return;
+    const dx = (-sw * fit) / 2 + sx * fit, dy = (-sh * fit) / 2 + sy * fit;
+    if (bgBlur > 0) {
+      const f0 = c.filter;
+      c.filter = `blur(${(bgBlur * 0.04 * Math.min(W, H)).toFixed(1)}px)`;
+      c.drawImage(el, sx, sy, cw, ch, dx, dy, cw * fit, ch * fit);
+      c.filter = f0;
+    }
+    c.drawImage(src, sx, sy, cw, ch, dx, dy, cw * fit, ch * fit);
+  };
   // Mask: the clip is drawn on its own layer and cut to the shape (soft edge = blurred shape).
   const mask = maskAt(item, lt);
   let masked = null;

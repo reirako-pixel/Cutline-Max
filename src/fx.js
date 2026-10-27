@@ -47,39 +47,39 @@ export const FILTERS = {
 };
 
 /** Effects by category. `mode` is the shader branch; ids stay stable in saved projects. */
-export const EFFECT_CATEGORIES = ["Distortion & Glitch", "Optical & Lens", "Light & Shadow", "Retro", "Party & Club", "Artistic"];
+export const EFFECT_CATEGORIES = ["Distortion & Glitch", "Optical & Lens", "Light & Shadow", "Retro", "Party & Club", "Artistic", "TV & Static", "Camera & Motion"];
 export const EFFECTS = {
-  glitch: { label: "Glitch", cat: 0, mode: 1 },
-  rgbSplit: { label: "RGB split", cat: 0, mode: 2 },
-  shake: { label: "Camera shake", cat: 0, mode: 3 },
+  glitch: { label: "Glitch", cat: 0, mode: 1, tags: "distort digital error" },
+  rgbSplit: { label: "RGB split", cat: 0, mode: 2, tags: "chromatic colour split glitch" },
+  shake: { label: "Camera shake", cat: 0, mode: 3, tags: "handheld camera earthquake" },
   wave: { label: "Wave", cat: 0, mode: 4 },
   ripple: { label: "Ripple", cat: 0, mode: 5 },
   swirl: { label: "Swirl", cat: 0, mode: 6 },
   bulge: { label: "Bulge", cat: 0, mode: 7 },
   pinch: { label: "Pinch", cat: 0, mode: 8 },
   pixelate: { label: "Pixelate", cat: 0, mode: 9 },
-  digitalNoise: { label: "Digital noise", cat: 0, mode: 10 },
-  slices: { label: "Slice shift", cat: 0, mode: 12 },
-  blur: { label: "Blur", cat: 1, mode: 20 },
+  digitalNoise: { label: "Digital noise", cat: 0, mode: 10, tags: "static noise snow tv" },
+  slices: { label: "Slice shift", cat: 0, mode: 12, tags: "glitch tear" },
+  blur: { label: "Blur", cat: 1, mode: 20, tags: "soft defocus" },
   zoomBlur: { label: "Zoom blur", cat: 1, mode: 21 },
-  motionBlur: { label: "Motion blur", cat: 1, mode: 22 },
+  motionBlur: { label: "Motion blur", cat: 1, mode: 22, tags: "trail long exposure speed" },
   tiltShift: { label: "Tilt-shift", cat: 1, mode: 23 },
   chromatic: { label: "Chromatic aberration", cat: 1, mode: 24 },
   fisheye: { label: "Fisheye lens", cat: 1, mode: 25 },
   dreamy: { label: "Dreamy glow", cat: 1, mode: 26 },
   focusPull: { label: "Focus pull", cat: 1, mode: 27 },
   bloom: { label: "Bloom", cat: 2, mode: 30 },
-  lightLeak: { label: "Light leak", cat: 2, mode: 31 },
+  lightLeak: { label: "Light leak", cat: 2, mode: 31, tags: "sun light warm" },
   flash: { label: "Flash", cat: 2, mode: 32 },
-  godRays: { label: "God rays", cat: 2, mode: 34 },
-  lensFlare: { label: "Lens flare", cat: 2, mode: 35 },
+  godRays: { label: "God rays", cat: 2, mode: 34, tags: "sun rays light beams" },
+  lensFlare: { label: "Lens flare", cat: 2, mode: 35, tags: "sun light" },
   neonEdges: { label: "Neon edges", cat: 2, mode: 36 },
   spotlight: { label: "Spotlight", cat: 2, mode: 37 },
   darkPulse: { label: "Shadow pulse", cat: 2, mode: 38 },
-  filmGrain: { label: "Film grain", cat: 3, mode: 40 },
-  oldFilm: { label: "Old film", cat: 3, mode: 41 },
-  vhs: { label: "VHS", cat: 3, mode: 42 },
-  crt: { label: "CRT screen", cat: 3, mode: 43 },
+  filmGrain: { label: "Film grain", cat: 3, mode: 40, tags: "noise texture grain" },
+  oldFilm: { label: "Old film", cat: 3, mode: 41, tags: "vintage retro tv" },
+  vhs: { label: "VHS", cat: 3, mode: 42, tags: "vcr tape retro tv" },
+  crt: { label: "CRT screen", cat: 3, mode: 43, tags: "tv retro old screen scanlines" },
   sepiaTone: { label: "Sepia tone", cat: 3, mode: 44 },
   halftone: { label: "Halftone", cat: 3, mode: 45 },
   posterize: { label: "Posterize", cat: 3, mode: 46 },
@@ -106,7 +106,55 @@ export const EFFECTS = {
   emboss: { label: "Emboss", cat: 5, mode: 76 },
   xray: { label: "X-ray", cat: 5, mode: 78 },
   colorPop: { label: "Colour pop (red)", cat: 5, mode: 79 },
+  sunRays: { label: "Sun rays", cat: 2, mode: 85, tags: "god rays light leak sunlight beams warm",
+    params: [{ label: "Atmosphere", def: 0.4 }, { label: "Warmth", def: 0.6 }, { label: "Sun position", def: 0.25 }],
+    presets: [{ label: "Morning", amount: 0.6, speed: 0.6, p: [0.3, 0.35, 0.2] }, { label: "Golden hour", amount: 0.85, speed: 0.5, p: [0.5, 0.95, 0.75] },
+      { label: "Hazy", amount: 0.7, speed: 0.4, p: [1, 0.5, 0.5] }, { label: "Heavenly", amount: 1, speed: 1, p: [0.7, 0.1, 0.5] }] },
+  staticNoise: { label: "Static noise", cat: 6, mode: 80, tags: "static morph tv snow grain noise chromatic",
+    params: [{ label: "Colour split", def: 0.5 }, { label: "Grain size", def: 0.3 }, { label: "Colour", def: 0 }],
+    presets: [{ label: "Light static", amount: 0.35, speed: 0.6, p: [0.3, 0.2, 0] }, { label: "Heavy snow", amount: 0.85, speed: 1, p: [0.6, 0.4, 0] },
+      { label: "Static morph", amount: 0.6, speed: 2, p: [1, 0.6, 0.4] }, { label: "No signal", amount: 1, speed: 1.5, p: [0.2, 0.2, 0.2] }] },
+  signalGlitch: { label: "Signal glitch", cat: 6, mode: 81, tags: "glitch distort level tear blocks signal drop digital",
+    params: [{ label: "Tears", def: 0.6 }, { label: "Blocks", def: 0.5 }, { label: "Signal drops", def: 0.3 }],
+    presets: [{ label: "Subtle", amount: 0.4, speed: 0.7, p: [0.4, 0.2, 0.1] }, { label: "Distort level", amount: 0.8, speed: 1, p: [0.8, 0.6, 0.3] },
+      { label: "Broken signal", amount: 1, speed: 1.6, p: [1, 1, 0.8] }] },
+  retroTV: { label: "Retro TV", cat: 6, mode: 82, tags: "old tv crt retro vintage scanlines curve",
+    params: [{ label: "Screen curve", def: 0.6 }, { label: "Scanlines", def: 0.6 }, { label: "Colour", def: 0.35 }],
+    presets: [{ label: "1980s set", amount: 0.8, speed: 1, p: [0.6, 0.6, 0.5] }, { label: "Black & white", amount: 1, speed: 1, p: [0.8, 0.8, 0] },
+      { label: "Flat screen", amount: 0.6, speed: 1, p: [0, 0.5, 0.8] }] },
+  vcr: { label: "VCR tape", cat: 6, mode: 83, tags: "vcr vhs tape camcorder tracking timecode battery overlay retro", hud: true,
+    params: [{ label: "Tracking", def: 0.5 }, { label: "Noise", def: 0.4 }, { label: "Colour bleed", def: 0.5 }],
+    presets: [{ label: "Home video", amount: 0.6, speed: 1, p: [0.3, 0.3, 0.4] }, { label: "Worn tape", amount: 0.9, speed: 1.2, p: [0.9, 0.7, 0.8] },
+      { label: "Clean HUD", amount: 0.25, speed: 1, p: [0.1, 0.1, 0.2] }] },
+  handheld: { label: "Handheld", cat: 7, mode: 84, tags: "fake camera shake handheld sway walk run",
+    params: [{ label: "Sway", def: 0.6 }, { label: "Tilt", def: 0.4 }, { label: "Breathing zoom", def: 0.3 }],
+    presets: [{ label: "Tripod breathing", amount: 0.35, speed: 0.4, p: [0.3, 0.2, 1] }, { label: "Gentle walk", amount: 0.45, speed: 0.7, p: [0.6, 0.4, 0.4] },
+      { label: "Walking", amount: 0.7, speed: 1, p: [0.8, 0.6, 0.3] }, { label: "Running", amount: 1, speed: 2.2, p: [1, 0.8, 0.2] },
+      { label: "Earthquake", amount: 1, speed: 4, p: [1, 0.3, 0] }] },
+  longExposure: { label: "Long exposure", cat: 7, mode: 86, tags: "motion trails light trail streak long exposure",
+    params: [{ label: "Trail length", def: 0.5 }, { label: "Direction", def: 0 }, { label: "Only bright parts", def: 0.4 }],
+    presets: [{ label: "Light streaks", amount: 0.8, speed: 0.3, p: [0.6, 0, 0.7] }, { label: "Dreamy smear", amount: 0.6, speed: 0.3, p: [0.4, 0.25, 0.1] },
+      { label: "Rising trails", amount: 0.9, speed: 0.3, p: [0.7, 0.5, 0.5] }] },
 };
+
+/** An effect's extra slider values (0–1), in the order of its `params`. */
+export const fxParams = (f) => (EFFECTS[f.type]?.params || []).map((d, i) => f.p?.[i] ?? d.def);
+
+/** A new effect entry for an item's fx list. */
+export function newFx(type, uid) {
+  const def = EFFECTS[type];
+  return { id: uid(), type, amount: 0.7, ...(def?.params ? { p: def.params.map((d) => d.def) } : {}) };
+}
+
+/** True if an effect matches a search ("glitch", "static", "handheld"…). */
+export function fxMatches(type, q) {
+  const d = EFFECTS[type];
+  if (!q) return true;
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const hit = (hay) => words.every((w) => hay.toLowerCase().includes(w));
+  // Names and keywords first; the category name only when nothing else matches it.
+  return hit(`${d.label} ${d.tags || ""}`) || (!Object.values(EFFECTS).some((e) => hit(`${e.label} ${e.tags || ""}`)) && hit(EFFECT_CATEGORIES[d.cat]));
+}
 
 // ---------------- what an item needs ----------------
 
@@ -201,6 +249,7 @@ void main(){
 const EFFECT = COMMON + `
 uniform int mode;
 uniform float amount;
+uniform vec3 P;
 const float PI = 3.14159265;
 vec4 blurAt(vec2 p, float r){
   vec4 acc = vec4(0.0); float w = 0.0;
@@ -506,6 +555,100 @@ void main(){
     c = S(p); vec3 rgb = unpm(c);
     float red = smoothstep(0.08, 0.25, rgb.r - max(rgb.g, rgb.b));
     c = pm(mix(rgb, mix(vec3(luma(rgb)), rgb, red), A), c.a);
+  } else if (mode == 80) { // static noise: drifting TV snow with a sideways colour split
+    float sz = mix(1.0, 5.0, P.y);
+    float tt = floor(time * 30.0);
+    vec2 cell = floor(vec2((p.x * res.x + time * 900.0) / (sz * 2.0), p.y * res.y / sz));
+    float n = rnd(cell + vec2(tt * 1.37, tt * 0.71));
+    vec3 snow = mix(vec3(n), vec3(rnd(cell + tt + 1.3), rnd(cell + tt + 2.7), rnd(cell + tt + 4.1)), P.z);
+    float band = 0.7 + 0.3 * sin(p.y * 7.0 + time * 4.0);
+    float s = 0.025 * P.x * A * (0.6 + 0.4 * sin(time * 5.0));
+    vec4 base = S(p);
+    vec3 rgb = vec3(unpm(S(p + vec2(s, 0))).r, unpm(base).g, unpm(S(p - vec2(s, 0))).b);
+    rgb = mix(rgb, snow, clamp(A * 0.7 * band, 0.0, 1.0));
+    c = pm(rgb, max(base.a, A * 0.8));
+  } else if (mode == 81) { // signal glitch: horizontal tears, block artifacts, signal drops
+    float tt = floor(time * 12.0);
+    float row = floor(p.y * 40.0);
+    float tear = step(1.0 - 0.3 * P.x * A, rnd(vec2(row, tt)));
+    float tearBand = step(0.72, noise(vec2(p.y * 8.0, time * 4.0)));
+    float off = (rnd(vec2(row * 1.7, tt)) - 0.5) * 0.3 * A * P.x * max(tear, tearBand * 0.35);
+    vec2 g = vec2(fract(p.x + off), p.y);
+    vec2 blk = floor(p * vec2(16.0, 9.0));
+    float bon = step(1.0 - 0.2 * P.y * A, rnd(blk + tt));
+    g += (vec2(rnd(blk + tt + 3.0), rnd(blk + tt + 5.0)) - 0.5) * 0.15 * bon;
+    float s = 0.015 * A;
+    vec3 rgb = vec3(unpm(S(g + vec2(s, 0))).r, unpm(S(g)).g, unpm(S(g - vec2(s, 0))).b);
+    rgb = mix(rgb, floor(mix(rgb, rgb.gbr, 0.6) * 5.0) / 5.0 * 1.2, bon * 0.6);
+    float drop = step(1.0 - 0.12 * P.z * A, rnd(vec2(tt, 9.0)));
+    float lineDrop = step(1.0 - 0.25 * P.z * A, rnd(vec2(floor(p.y * 120.0), tt * 3.1)));
+    rgb = mix(rgb, vec3(rnd(floor(p * res / 2.0) + tt)), drop * 0.85);
+    rgb *= 1.0 - lineDrop * 0.85;
+    c = pm(rgb, S(g).a);
+  } else if (mode == 82) { // retro TV: curved screen, rolling bar, scanlines, faded colour
+    vec2 d = p - 0.5; d *= 1.0 + P.x * A * 0.3 * dot(d, d) * 4.0;
+    vec2 q = d + 0.5;
+    if (any(lessThan(q, vec2(0.0))) || any(greaterThan(q, vec2(1.0)))) { c = vec4(0.0, 0.0, 0.0, 1.0); }
+    else {
+      float jit = (rnd(vec2(floor(time * 20.0), floor(q.y * 200.0))) - 0.5) * 0.002 * A;
+      vec4 base = S(q + vec2(jit, 0.0)); vec3 rgb = unpm(base);
+      rgb = mix(vec3(luma(rgb)), rgb, mix(1.0, P.z, A));
+      rgb = mix(rgb, rgb * vec3(1.06, 1.0, 0.82), A * 0.5);
+      float scan = 0.5 + 0.5 * sin(q.y * res.y * 1.6);
+      rgb *= 1.0 - P.y * A * 0.5 * (1.0 - scan);
+      float bar = fract(q.y * 0.8 + time * 0.2);
+      rgb *= 1.0 + 0.2 * A * smoothstep(0.0, 0.06, bar) * smoothstep(0.18, 0.06, bar);
+      rgb += (rnd(q * res + fract(time) * 97.0) - 0.5) * 0.08 * A;
+      rgb *= 1.0 - A * 0.7 * smoothstep(0.3, 0.75, length(q - 0.5));
+      rgb *= 1.0 - 0.05 * A * rnd(vec2(floor(time * 24.0), 2.0));
+      c = pm(rgb, max(base.a, A));
+    }
+  } else if (mode == 83) { // VCR tape: tracking wobble, rolling tracking band, colour bleed, tape noise
+    float bandY = fract(-time * 0.15);
+    float inBand = smoothstep(0.06, 0.0, abs(p.y - bandY));
+    float bottom = smoothstep(0.06, 0.0, p.y);
+    float shift = ((noise(vec2(p.y * 60.0, time * 8.0)) - 0.5) * 0.008 + inBand * 0.05 * (noise(vec2(p.y * 200.0, time * 20.0)) - 0.3)) * P.x * A;
+    shift += bottom * 0.05 * P.x * A * (rnd(vec2(floor(p.y * res.y / 2.0), floor(time * 30.0))) - 0.5);
+    vec2 g = p + vec2(shift, 0.0);
+    float s = (0.003 + 0.012 * P.z) * A;
+    vec3 rgb = vec3(unpm(S(g + vec2(s, 0))).r, unpm(S(g)).g, unpm(S(g - vec2(s * 1.5, 0))).b);
+    rgb = mix(rgb, vec3(luma(rgb)), 0.12 * A) * mix(vec3(1.0), vec3(1.02, 0.98, 1.08), A);
+    rgb += (rnd(vec2(floor(p.x * res.x * 0.5 + time * 100.0), floor(p.y * res.y / 2.0) + floor(time * 30.0))) - 0.5) * 0.28 * P.y * A;
+    rgb += inBand * P.x * A * 0.35 * step(0.7, rnd(vec2(floor(p.x * res.x * 0.3), floor(time * 30.0) + floor(p.y * 400.0))));
+    rgb = mix(rgb, vec3(rnd(floor(p * res / 2.0) + floor(time * 30.0))), bottom * P.x * A * 0.7);
+    rgb *= 1.0 - 0.12 * A * step(0.5, fract(p.y * res.y * 0.5));
+    c = pm(rgb, S(g).a);
+  } else if (mode == 84) { // handheld: smooth organic sway, tilt and breathing zoom (zoomed in to hide the edges)
+    vec2 j = vec2(noise(vec2(time * 1.3, 1.7)) + 0.5 * noise(vec2(time * 3.1, 4.2)), noise(vec2(time * 1.1, 7.3)) + 0.5 * noise(vec2(time * 2.9, 9.1))) / 1.5 - 0.5;
+    j *= 0.06 * A * P.x;
+    float ang = (noise(vec2(time * 0.9, 12.0)) - 0.5) * 0.09 * A * P.y;
+    float z = 1.0 + A * (0.07 * P.x + 0.05 * P.y) + 0.04 * A * P.z * (0.5 + 0.5 * sin(time * 1.4));
+    vec2 d = (p - 0.5) * vec2(asp, 1.0);
+    d = mat2(cos(ang), -sin(ang), sin(ang), cos(ang)) * d;
+    c = S(d / vec2(asp, 1.0) / z + 0.5 + j);
+  } else if (mode == 85) { // sun rays: shimmering beams from a sun just above the frame, with haze and warmth
+    vec2 src = vec2(mix(0.05, 0.95, P.z) + 0.03 * sin(time * 0.5), 1.08);
+    vec2 dir = (p - src) * vec2(asp, 1.0);
+    float r = length(dir);
+    float ang = atan(dir.x, -dir.y);
+    float rays = noise(vec2(ang * 9.0, time * 0.6)) + 0.6 * noise(vec2(ang * 23.0, time * 1.1 + 5.0));
+    rays = pow(rays / 1.6, 2.2) * smoothstep(1.7, 0.0, r);
+    vec3 acc = vec3(0.0);
+    for (int i = 0; i < 16; i++) { float t = float(i) / 16.0; acc += max(unpm(S(mix(p, src, t * 0.5))) - 0.55, 0.0) * (1.0 - t); }
+    vec3 warm = mix(vec3(1.0, 0.97, 0.9), vec3(1.0, 0.6, 0.22), P.y);
+    vec3 light = warm * (rays * 1.3 + P.x * 0.45 * smoothstep(1.5, 0.0, r) + smoothstep(0.4, 0.0, r) * 0.8) + acc / 6.0 * warm;
+    vec4 base = S(p);
+    vec4 tinted = pm(mix(unpm(base), unpm(base) * mix(vec3(1.0), vec3(1.08, 1.0, 0.86), P.y), A), base.a);
+    c = blendScreen(tinted, light * A);
+  } else if (mode == 86) { // long exposure (approximation): bright parts leave trails along a direction
+    float ang = P.y * PI;
+    vec2 dir = vec2(cos(ang), sin(ang)) * vec2(1.0 / asp, 1.0) * 0.15 * P.x * A * (0.85 + 0.15 * sin(time * 1.5));
+    vec4 base = S(p); vec3 trail = vec3(0.0);
+    for (int i = 1; i <= 20; i++) {
+      float t = float(i) / 20.0; vec3 s = unpm(S(p - dir * t));
+      trail = max(trail, s * smoothstep(mix(0.0, 0.75, P.z), 1.0, luma(s)) * (1.0 - t * 0.9));
+    }
+    c = pm(max(unpm(base), trail), base.a);
   } else {
     c = S(p);
   }
@@ -640,6 +783,9 @@ export function applyFx(source, s, time, W, H) {
     passes.push({ prog: progs.effect, set: (P) => {
       gl.uniform1i(P.u("mode"), def.mode);
       gl.uniform1f(P.u("amount"), Math.min(1, f.amount));
+      gl.uniform1f(P.u("time"), time * (f.speed ?? 1)); // the effect's own speed
+      const v = fxParams(f);
+      gl.uniform3f(P.u("P"), v[0] ?? 0, v[1] ?? 0, v[2] ?? 0);
     } });
   }
   if (!passes.length) passes.push({ prog: progs.copy, set: () => {} });
@@ -659,7 +805,40 @@ export function applyFx(source, s, time, W, H) {
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     input = out.tex;
   });
-  return gl.canvas;
+  const hud = (s.fx || []).find((f) => EFFECTS[f.type]?.hud && f.amount > 0 && f.hud !== false);
+  return hud ? withHud(gl.canvas, time, W, H) : gl.canvas;
+}
+
+let hudCanvas = null;
+/** The VCR on-screen display (PLAY ▶, battery, tape counter and date) over the effect result. */
+function withHud(src, time, W, H) {
+  if (!hudCanvas || hudCanvas.width !== W || hudCanvas.height !== H) hudCanvas = new OffscreenCanvas(W, H);
+  const c = hudCanvas.getContext("2d");
+  c.clearRect(0, 0, W, H);
+  c.drawImage(src, 0, 0);
+  const u = Math.min(W, H) / 100, m = 6 * u;
+  c.save();
+  c.font = `bold ${(6 * u).toFixed(1)}px "Courier New", monospace`;
+  c.textBaseline = "top";
+  c.fillStyle = "#f4f4f4";
+  c.shadowColor = "rgba(0,0,0,0.75)"; c.shadowOffsetX = u * 0.4; c.shadowOffsetY = u * 0.4; c.shadowBlur = u * 0.6;
+  c.fillText("PLAY \u25B6", m, m);
+  // battery: outline, tip and level bars (the last bar blinks)
+  const bw = 12 * u, bh = 5.5 * u, bx = W - m - bw - u, by = m + 0.5 * u;
+  c.lineWidth = u * 0.7; c.strokeStyle = "#f4f4f4";
+  c.strokeRect(bx, by, bw, bh);
+  c.fillRect(bx + bw, by + bh * 0.3, u, bh * 0.4);
+  const bars = Math.floor(time * 2) % 2 ? 3 : 2;
+  for (let i = 0; i < bars; i++) c.fillRect(bx + u + i * (bw - u) / 3, by + u, (bw - u) / 3 - u, bh - 2 * u);
+  c.textBaseline = "bottom";
+  const t = Math.max(0, time), hh = Math.floor(t / 3600), mm = Math.floor(t / 60) % 60, ss = Math.floor(t) % 60;
+  c.fillText(`SP  ${hh}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`, m, H - m);
+  const d = new Date();
+  const date = `${d.toLocaleString("en", { month: "short" }).toUpperCase()}. ${String(d.getDate()).padStart(2, "0")} ${d.getFullYear()}`;
+  c.textAlign = "right";
+  c.fillText(date, W - m, H - m);
+  c.restore();
+  return hudCanvas;
 }
 
 /** Renders a small preview card of an effect or filter over `source` (for the catalogue). */

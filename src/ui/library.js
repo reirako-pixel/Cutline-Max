@@ -1,7 +1,7 @@
 // Left-panel catalogues: effects and filters (with live previews), audio (music + text-to-speech) and text presets.
 import React, { useEffect, useRef, useState } from "react";
 import { useStore, getState } from "../store.js";
-import { EFFECTS, EFFECT_CATEGORIES, FILTERS, fxThumbnail } from "../fx.js";
+import { EFFECTS, EFFECT_CATEGORIES, FILTERS, fxThumbnail, fxMatches } from "../fx.js";
 import { applyEffect, applyFilter, addAdjustmentLayer, importFiles, addText, toast } from "../actions.js";
 import { html, Field, db } from "./kit.js";
 import { loadFont } from "./fonts.js";
@@ -61,18 +61,24 @@ export function EffectsTab({ cat: fixedCat }) {
   const selCount = useStore((s) => s.selection.filter((x) => x.kind === "main" || x.kind === "overlay").length);
   const [source, refresh] = useSource([]);
   const [ownCat, setCat] = useState(0);
+  const [q, setQ] = useState("");
   const cat = fixedCat ?? ownCat;
+  const list = Object.entries(EFFECTS).filter(([k, d]) => (q.trim() ? fxMatches(k, q.trim()) : d.cat === cat));
   return html`<div>
-    <div class="row between"><b class="lib-title">${EFFECT_CATEGORIES[cat]}</b><button class="mini" title="Preview on the current frame" onClick=${refresh}>↻ Refresh</button></div>
+    <div class="fx-search"><i class="ico icon-search" />
+      <input type="search" placeholder="Search effects: static, glitch, handheld…" value=${q} onInput=${(e) => setQ(e.target.value)}
+        onKeyDown=${(e) => { if (e.key === "Escape") { setQ(""); e.stopPropagation(); } }} /></div>
+    <div class="row between"><b class="lib-title">${q.trim() ? `Results for “${q.trim()}”` : EFFECT_CATEGORIES[cat]}</b><button class="mini" title="Preview on the current frame" onClick=${refresh}>↻ Refresh</button></div>
     <p class="muted">${selCount ? `Click to add to the ${selCount} selected clip${selCount > 1 ? "s" : ""}.` : "Click to add over the timeline at the playhead (or select a clip first)."}</p>
-    ${fixedCat == null && html`<select value=${cat} onChange=${(e) => setCat(+e.target.value)} style=${{ width: "100%" }}>
+    ${fixedCat == null && !q.trim() && html`<select value=${cat} onChange=${(e) => setCat(+e.target.value)} style=${{ width: "100%" }}>
       ${EFFECT_CATEGORIES.map((c, i) => html`<option value=${i}>${c}</option>`)}
     </select>`}
+    ${!list.length && html`<p class="muted">No effects match “${q.trim()}”.</p>`}
     <div class="cards">
-      ${Object.entries(EFFECTS).filter(([, d]) => d.cat === cat).map(([k, d]) => html`<button key=${k} class="card" onClick=${(e) => applyEffect(k, { toTimeline: e.altKey })}
-          title=${selCount ? "Add to the selected clips (Alt+click: add to the timeline instead)" : "Add to the timeline"}>
-        <${Thumb} settings=${{ fx: [{ type: k, amount: 0.8 }] }} source=${source} />
-        <span>${d.label}</span>
+      ${list.map(([k, d]) => html`<button key=${k} class="card" onClick=${(e) => applyEffect(k, { toTimeline: e.altKey })}
+          title=${(selCount ? "Add to the selected clips (Alt+click: add to the timeline instead)" : "Add to the timeline") + (d.params ? `\nAdjust: speed, ${d.params.map((p) => p.label.toLowerCase()).join(", ")}` : "")}>
+        <${Thumb} settings=${{ fx: [{ type: k, amount: 0.8, p: d.params?.map((p) => p.def), hud: false }] }} source=${source} />
+        <span>${d.label}${q.trim() ? html` <small class="muted">${EFFECT_CATEGORIES[d.cat]}</small>` : ""}</span>
       </button>`)}
     </div>
   </div>`;

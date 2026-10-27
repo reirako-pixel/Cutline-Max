@@ -3,11 +3,11 @@ import {
   getState, setState, edit, editLive, uid, layoutMain, projectDuration, removeMain, defaultTextStyle, LANES, findItem, freeTrack,
   compactTracks,
 } from "./store.js";
-import { allVideoElements, clipSpeed, elementFor } from "./engine.js";
+import { allVideoElements, clipSpeed, elementFor, clipTransform } from "./engine.js";
 import { setting, lastDur } from "./settings.js";
 import { resumeLive } from "./audiofx.js";
 import { splitKeyframes, shiftKeyframes, setKey, removeKey, removeKeysAt, keyAt, propAt, hasKeys, setStatic } from "./keyframes.js";
-import { EFFECTS, FILTERS } from "./fx.js";
+import { EFFECTS, FILTERS, newFx } from "./fx.js";
 import { hasCurve, sourceAt, sourceSpan, subCurve, rampEnd, rampStart, startSpeed, endSpeed } from "./speed.js";
 
 /** Splits a clip's speed curve at local time `local` between two halves a (before) and b (after); mutates. */
@@ -871,13 +871,13 @@ export function applyEffect(type, { toTimeline = false } = {}) {
   if (!targets.length) {
     const { time } = getState();
     const id = uid();
-    edit((p) => p.effects.push({ id, track: freeTrack(p.effects, time, 3), start: time, dur: 3, name: EFFECTS[type].label, fx: [{ id: uid(), type, amount: 0.7 }] }));
+    edit((p) => p.effects.push({ id, track: freeTrack(p.effects, time, 3), start: time, dur: 3, name: EFFECTS[type].label, fx: [newFx(type, uid)] }));
     setState({ selection: [{ kind: "effect", id }] });
     return toast(`${EFFECTS[type].label} added to the timeline`);
   }
   edit((p) => targets.forEach((t) => {
     const it = findItem(p, t.kind, t.id);
-    it.fx = [...(it.fx || []), { id: uid(), type, amount: 0.7 }];
+    it.fx = [...(it.fx || []), newFx(type, uid)];
   }));
   toast(`${EFFECTS[type].label} added to ${targets.length} clip${targets.length > 1 ? "s" : ""}`);
 }
@@ -1126,4 +1126,29 @@ export function pasteSettings() {
     if (it.shape && shapeLook) it.shape = { ...it.shape, ...shapeLook };
   }));
   toast(`Pasted settings onto ${targets.length} item${targets.length > 1 ? "s" : ""}`);
+}
+
+/** Slow zoom & pan ("Ken Burns") moves over a clip's whole length, made of ordinary keyframes you can edit later. */
+export const MOTION_PRESETS = {
+  zoomIn: { label: "Slow zoom in", icon: "zoom-in", make: (b) => ({ scale: [b.scale, b.scale * 1.18] }) },
+  zoomOut: { label: "Slow zoom out", icon: "zoom-out", make: (b) => ({ scale: [b.scale * 1.18, b.scale] }) },
+  panLeft: { label: "Pan left", icon: "arrow-left", make: (b) => ({ scale: [b.scale * 1.2, b.scale * 1.2], x: [b.x + 0.07, b.x - 0.07] }) },
+  panRight: { label: "Pan right", icon: "arrow-right", make: (b) => ({ scale: [b.scale * 1.2, b.scale * 1.2], x: [b.x - 0.07, b.x + 0.07] }) },
+  panUp: { label: "Pan up", icon: "arrow-up", make: (b) => ({ scale: [b.scale * 1.2, b.scale * 1.2], y: [b.y + 0.06, b.y - 0.06] }) },
+  panDown: { label: "Pan down", icon: "arrow-down", make: (b) => ({ scale: [b.scale * 1.2, b.scale * 1.2], y: [b.y - 0.06, b.y + 0.06] }) },
+  zoomRotate: { label: "Zoom & turn", icon: "rotate-cw", make: (b) => ({ scale: [b.scale, b.scale * 1.22], rotation: [b.rotation, b.rotation + 4] }) },
+  zoomCorner: { label: "Zoom to corner", icon: "move-up-right", make: (b) => ({ scale: [b.scale, b.scale * 1.25], x: [b.x, b.x - 0.05], y: [b.y, b.y + 0.04] }) },
+};
+
+export function applyMotionPreset(kind, id, type) {
+  edit((p) => {
+    const it = findItem(p, kind, id);
+    if (!it) return;
+    it.keyframes = it.keyframes || {};
+    for (const k of ["x", "y", "scale", "rotation"]) delete it.keyframes[k];
+    const preset = MOTION_PRESETS[type];
+    if (preset) for (const [k, [a, b]] of Object.entries(preset.make(clipTransform(it))))
+      it.keyframes[k] = [{ t: 0, v: a, ease: "linear" }, { t: it.dur, v: b, ease: "linear" }];
+  });
+  toast(MOTION_PRESETS[type] ? `${MOTION_PRESETS[type].label} added (as keyframes you can edit)` : "Zoom & pan removed");
 }
