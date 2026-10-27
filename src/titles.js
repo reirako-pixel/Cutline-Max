@@ -29,17 +29,140 @@ function phase(T, lt, dur, a = 0.7, b = 0.5) {
 }
 const line = (T, n, def) => (T.lines?.[n] ?? def ?? "");
 function font(c, css, weight, size, italic = false) { c.font = `${italic ? "italic " : ""}${weight} ${Math.max(1, size)}px ${css}`; }
-/** Fills (and optionally strokes first) text with letter spacing `sp` (em). */
-function text(c, s, x, y, { sp = 0, size = 10, fill, stroke, sw = 0, align = "center", base = "middle" } = {}) {
+// ---------- text style (Style tab): fill, outline, shadow, glow on top of any template ----------
+
+/** The style of the title being drawn: { look, lt, dur, k } (set by drawTitle). */
+let CUR = null;
+
+const rgba = (hex, a = 1) => {
+  const h = String(hex || "#000000").replace("#", "");
+  const n = parseInt(h.length === 3 ? h.split("").map((x) => x + x).join("") : h.slice(0, 6), 16) || 0;
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+};
+
+// Procedural textures, drawn once into small tiles.
+const tiles = new Map();
+function tile(name) {
+  if (tiles.has(name)) return tiles.get(name);
+  const S = 256, cv = new OffscreenCanvas(S, S), c = cv.getContext("2d");
+  if (name === "marble") {
+    c.fillStyle = "#f2f0ec"; c.fillRect(0, 0, S, S);
+    for (let v = 0; v < 7; v++) {
+      c.beginPath(); c.moveTo(0, hash(v, 1) * S);
+      for (let x = 0; x <= S; x += 8) c.lineTo(x, hash(v, 1) * S + Math.sin(x / 30 + v) * 26 + (hash(v, x) - 0.5) * 10);
+      c.strokeStyle = `rgba(90,90,100,${0.25 + hash(v, 3) * 0.4})`; c.lineWidth = 1 + hash(v, 4) * 3; c.stroke();
+    }
+  } else if (name === "galaxy") {
+    const g = c.createLinearGradient(0, 0, S, S);
+    g.addColorStop(0, "#2a0b4f"); g.addColorStop(0.5, "#5b1c8f"); g.addColorStop(1, "#0d2a6b");
+    c.fillStyle = g; c.fillRect(0, 0, S, S);
+    for (let i = 0; i < 160; i++) { c.fillStyle = `rgba(255,255,255,${hash(i, 2)})`; c.fillRect(hash(i, 3) * S, hash(i, 4) * S, 1 + hash(i, 5) * 1.6, 1 + hash(i, 5) * 1.6); }
+  } else if (name === "glitter") {
+    c.fillStyle = "#c0306a"; c.fillRect(0, 0, S, S);
+    for (let i = 0; i < 900; i++) { c.fillStyle = `hsla(${320 + hash(i, 1) * 60},90%,${50 + hash(i, 2) * 50}%,${0.5 + hash(i, 3) * 0.5})`; c.fillRect(hash(i, 4) * S, hash(i, 5) * S, 2, 2); }
+  }
+  tiles.set(name, cv);
+  return cv;
+}
+
+/** Textures: gradients that follow the letters, or repeating tiles. */
+const TEXTURES = {
+  gold: [["#fff4c2", 0], ["#f2c14e", 0.35], ["#9c6a12", 0.52], ["#f8d77a", 0.68], ["#7a4c08", 1]],
+  chrome: [["#e9f4ff", 0], ["#9fc4e8", 0.45], ["#273447", 0.5], ["#ffffff", 0.56], ["#7c6a58", 1]],
+  holo: "holo", fire: [["#fff3a0", 0], ["#ffb02e", 0.4], ["#ff4b1f", 0.75], ["#9c0d0d", 1]],
+  ice: [["#ffffff", 0], ["#c8f4ff", 0.4], ["#5ec8ff", 0.75], ["#2a6bd8", 1]],
+  marble: "tile", galaxy: "tile", glitter: "tile",
+};
+export const TEXTURE_NAMES = [["gold", "Gold foil"], ["chrome", "Chrome"], ["holo", "Holographic"], ["fire", "Fire"], ["ice", "Ice"], ["marble", "Marble"], ["galaxy", "Galaxy"], ["glitter", "Glitter"]];
+
+/** The paint for a text box (x0, y0, w, h) under fill settings f. */
+function paintFor(c, f, x0, y0, w, h) {
+  if (f.type === "gradient") {
+    const a = ((f.angle ?? 90) * Math.PI) / 180, cx = x0 + w / 2, cy = y0 + h / 2;
+    const r = (Math.abs(Math.cos(a)) * w + Math.abs(Math.sin(a)) * h) / 2;
+    const g = c.createLinearGradient(cx - Math.cos(a) * r, cy - Math.sin(a) * r, cx + Math.cos(a) * r, cy + Math.sin(a) * r);
+    g.addColorStop(0, f.c1 || "#ffffff"); g.addColorStop(1, f.c2 || "#000000");
+    return g;
+  }
+  if (f.type === "texture") {
+    const t = TEXTURES[f.texture] || TEXTURES.gold;
+    if (t === "tile") {
+      const p = c.createPattern(tile(f.texture), "repeat");
+      p?.setTransform?.(new DOMMatrix().translate(x0, y0).scale(Math.max(0.2, h / 180)));
+      return p || "#ffffff";
+    }
+    if (t === "holo") {
+      const g = c.createLinearGradient(x0, y0, x0 + w, y0 + h);
+      ["#ffb3e6", "#b3c7ff", "#b3fff0", "#fff6b3", "#ffb3e6", "#c9b3ff"].forEach((col, i, a) => g.addColorStop(i / (a.length - 1), col));
+      return g;
+    }
+    const g = c.createLinearGradient(0, y0, 0, y0 + h);
+    for (const [col, at] of t) g.addColorStop(at, col);
+    return g;
+  }
+  return f.c1 || "#ffffff";
+}
+
+/**
+ * Draws one run of text (already set up: font, spacing, alignment) at (x, y) with the current title's style.
+ * tFill / tStroke / tSw: what the template would use. karaokeAt: for letter-by-letter templates, this
+ * letter's position along the line (0..1) so it's either sung or not.
+ */
+function styled(c, s, x, y, size, w, tFill, tStroke, tSw, karaokeAt) {
+  const L = CUR.look, k = CUR.k;
+  const x0 = c.textAlign === "center" ? x - w / 2 : c.textAlign === "right" ? x - w : x, y0 = y - size * 0.6, h = size * 1.2;
+  const f = L.fill?.type && L.fill.type !== "template" ? L.fill : null;
+  const fill = f ? (f.type === "karaoke" ? f.c2 || "#ffffff" : paintFor(c, f, x0, y0, w, h)) : tFill;
+  c.save();
+  c.shadowColor = "transparent"; c.shadowBlur = 0; c.shadowOffsetX = 0; c.shadowOffsetY = 0;
+  if (L.glow?.on) {
+    c.shadowColor = rgba(L.glow.color || "#ffffff", 1); c.shadowBlur = (L.glow.size ?? 20) * k;
+    c.fillStyle = L.glow.color || "#ffffff";
+    for (let i = 0; i < Math.max(1, Math.round(L.glow.strength ?? 2)); i++) c.fillText(s, x, y);
+    c.shadowColor = "transparent"; c.shadowBlur = 0;
+  }
+  if (L.shadow?.on) {
+    const a = ((L.shadow.angle ?? 45) * Math.PI) / 180, d = (L.shadow.dist ?? 8) * k;
+    c.shadowColor = rgba(L.shadow.color || "#000000", L.shadow.opacity ?? 0.6);
+    c.shadowBlur = (L.shadow.blur ?? 10) * k; c.shadowOffsetX = Math.cos(a) * d; c.shadowOffsetY = Math.sin(a) * d;
+    c.fillStyle = fill || "#000"; c.fillText(s, x, y);
+    if (L.stroke?.on) { c.strokeStyle = L.stroke.color || "#000"; c.lineWidth = (L.stroke.width ?? 6) * k * 2; c.strokeText(s, x, y); }
+    c.shadowColor = "transparent"; c.shadowBlur = 0; c.shadowOffsetX = 0; c.shadowOffsetY = 0;
+  }
+  if (L.stroke?.on && (L.stroke.width ?? 6) > 0) {
+    c.strokeStyle = L.stroke.color || "#000000"; c.lineWidth = (L.stroke.width ?? 6) * k * 2; c.lineJoin = "round";
+    if ((L.stroke.blur ?? 0) > 0) c.filter = `blur(${(L.stroke.blur * k).toFixed(1)}px)`;
+    c.strokeText(s, x, y);
+    c.filter = "none";
+  } else if (tStroke && tSw > 0) { c.strokeStyle = tStroke; c.lineWidth = tSw; c.strokeText(s, x, y); }
+  if (fill) { c.fillStyle = fill; c.fillText(s, x, y); }
+  if (f?.type === "karaoke") {
+    // The sung part sweeps across the line over the clip (after the intro, before the outro).
+    const prog = clamp01((CUR.lt - 0.4) / Math.max(0.5, CUR.dur - 1.0));
+    if (karaokeAt == null) { c.beginPath(); c.rect(x0 - 2 * k, y0 - size, (w + 4 * k) * prog, h + size * 2); c.clip(); }
+    if (karaokeAt == null || karaokeAt < prog) { c.fillStyle = f.c1 || "#3df2ff"; c.fillText(s, x, y); }
+  }
+  c.restore();
+}
+
+/** Fills (and optionally strokes first) text with letter spacing `sp` (em). `deco`: a decorative copy (shadow, extrusion) that a custom fill replaces. */
+function text(c, s, x, y, { sp = 0, size = 10, fill, stroke, sw = 0, align = "center", base = "middle", deco = false } = {}) {
   c.letterSpacing = `${(sp * size).toFixed(2)}px`;
   c.textAlign = align; c.textBaseline = base; c.lineJoin = "round";
   // Canvas adds the spacing after the last letter too; nudge centred / right-aligned text back by half / all of it.
   const fix = align === "center" ? (sp * size) / 2 : align === "right" ? sp * size : 0;
-  if (stroke && sw > 0) { c.strokeStyle = stroke; c.lineWidth = sw; c.strokeText(s, x + fix, y); }
-  if (fill) { c.fillStyle = fill; c.fillText(s, x + fix, y); }
-  const w = c.measureText(s).width - sp * size;
+  const w = Math.max(0, c.measureText(s).width - sp * size);
+  const L = CUR?.look;
+  if (!L) {
+    if (stroke && sw > 0) { c.strokeStyle = stroke; c.lineWidth = sw; c.strokeText(s, x + fix, y); }
+    if (fill) { c.fillStyle = fill; c.fillText(s, x + fix, y); }
+  } else if (deco) {
+    if (!(L.fill?.type && L.fill.type !== "template")) { if (fill) { c.fillStyle = fill; c.fillText(s, x + fix, y); } }
+  } else if (!fill) {
+    if (!L.stroke?.on && stroke && sw > 0) { c.strokeStyle = stroke; c.lineWidth = sw; c.strokeText(s, x + fix, y); }
+  } else styled(c, s, x + fix, y, size, w, fill, stroke, sw);
   c.letterSpacing = "0px";
-  return Math.max(0, w);
+  return w;
 }
 const measure = (c, s, size, sp = 0) => { c.letterSpacing = `${(sp * size).toFixed(2)}px`; const w = c.measureText(s).width - sp * size; c.letterSpacing = "0px"; return Math.max(0, w); };
 function rrect(c, x, y, w, h, r) {
@@ -144,7 +267,7 @@ export const TITLE_TEMPLATES = [
       c.globalAlpha *= flick * p.oe;
       font(c, T.font || F.righteous, 400, 170 * k);
       c.shadowColor = T.colorB;
-      for (const blur of [60, 30, 12]) { c.shadowBlur = blur * k; text(c, line(T, 0), 0, 0, { sp: 0.06, size: 170 * k, fill: T.colorB }); }
+      for (const blur of [60, 30, 12]) { c.shadowBlur = blur * k; text(c, line(T, 0), 0, 0, { sp: 0.06, size: 170 * k, fill: T.colorB, deco: true }); }
       c.shadowBlur = 6 * k;
       text(c, line(T, 0), 0, 0, { sp: 0.06, size: 170 * k, fill: T.colorA });
     },
@@ -188,7 +311,7 @@ export const TITLE_TEMPLATES = [
       font(c, T.font || F.abril, 400, 190 * k);
       const s0 = line(T, 0), h = 190 * k, w = measure(c, s0, h, 0.04);
       // Extrusion: darker copies stepping down-right.
-      for (let d = 14; d >= 1; d--) text(c, s0, d * 0.9 * k, d * 1.1 * k, { sp: 0.04, size: h, fill: d > 10 ? "#1a1208" : T.colorB });
+      for (let d = 14; d >= 1; d--) text(c, s0, d * 0.9 * k, d * 1.1 * k, { sp: 0.04, size: h, fill: d > 10 ? "#1a1208" : T.colorB, deco: true });
       const g = c.createLinearGradient(0, -h * 0.45, 0, h * 0.45);
       g.addColorStop(0, T.colorA); g.addColorStop(0.42, "#e2b553"); g.addColorStop(0.5, T.colorB); g.addColorStop(0.62, "#f4d27a"); g.addColorStop(1, T.colorB);
       text(c, s0, 0, 0, { sp: 0.04, size: h, fill: g, stroke: "#3a2606", sw: 3 * k });
@@ -242,8 +365,8 @@ export const TITLE_TEMPLATES = [
           c.translate(x + cw / 2 + (hash(i, frame) - 0.5) * 5 * k, (hash(i + 50, frame) - 0.5) * 6 * k);
           c.rotate((hash(i + 99, frame) - 0.5) * 0.12);
           c.scale(appear, appear);
-          c.strokeStyle = T.colorB; c.lineWidth = 8 * k; c.strokeText(ch, -cw / 2, 0);
-          c.fillStyle = T.colorA; c.fillText(ch, -cw / 2, 0);
+          if (CUR?.look) styled(c, ch, -cw / 2, 0, size, cw, T.colorA, T.colorB, 8 * k, (i + 0.5) / s0.length);
+          else { c.strokeStyle = T.colorB; c.lineWidth = 8 * k; c.strokeText(ch, -cw / 2, 0); c.fillStyle = T.colorA; c.fillText(ch, -cw / 2, 0); }
           c.restore();
         }
         x += cw;
@@ -268,9 +391,12 @@ export const TITLE_TEMPLATES = [
           c.save();
           c.globalAlpha *= p.oe;
           c.translate(x + cw / 2, 0); c.rotate((i % 2 ? 1 : -1) * 0.04); c.scale(s, s);
-          c.fillStyle = T.colorB; c.fillText(ch, -cw / 2 + 9 * k, 10 * k); // hard drop shadow
-          c.strokeStyle = T.colorB; c.lineWidth = 14 * k; c.strokeText(ch, -cw / 2, 0);
-          c.fillStyle = T.colorA; c.fillText(ch, -cw / 2, 0);
+          if (CUR?.look) styled(c, ch, -cw / 2, 0, size, cw, T.colorA, T.colorB, 14 * k, (i + 0.5) / s0.length);
+          else {
+            c.fillStyle = T.colorB; c.fillText(ch, -cw / 2 + 9 * k, 10 * k); // hard drop shadow
+            c.strokeStyle = T.colorB; c.lineWidth = 14 * k; c.strokeText(ch, -cw / 2, 0);
+            c.fillStyle = T.colorA; c.fillText(ch, -cw / 2, 0);
+          }
           c.restore();
         }
         x += cw;
@@ -403,7 +529,7 @@ export const TITLE_TEMPLATES = [
       c.strokeStyle = "#111"; c.lineWidth = 8 * k; rrect(c, -W / 2, -H / 2, W, H, 14 * k); c.stroke();
       font(c, T.font || F.bangers, 400, 104 * k);
       for (const [n, y] of [[0, -58 * k], [1, 62 * k]]) {
-        text(c, line(T, n), 6 * k, y + 7 * k, { sp: 0.03, size: 104 * k, fill: "#111" });
+        text(c, line(T, n), 6 * k, y + 7 * k, { sp: 0.03, size: 104 * k, fill: "#111", deco: true });
         text(c, line(T, n), 0, y, { sp: 0.03, size: 104 * k, fill: "#ffffff", stroke: "#111", sw: 12 * k });
       }
     },
@@ -548,8 +674,18 @@ export function titleFonts(T) {
 /** Draws title settings T at local time lt of a clip lasting dur; origin at the anchor, k = frame width / 1920. */
 export function drawTitle(c, T, lt, dur, k) {
   c.save();
-  titleTemplate(T.tpl)[3].draw(c, T, lt, dur, k);
-  c.restore();
+  CUR = T.look ? { look: T.look, lt, dur, k } : null;
+  try { titleTemplate(T.tpl)[3].draw(c, T, lt, dur, k); } finally { CUR = null; c.restore(); }
+}
+
+/** Draws "Aa" in a style, for the Style tab's preset swatches (t: time, so karaoke shows half sung). */
+export function drawStyleSample(c, look, W, H, t = 1.5) {
+  c.setTransform(1, 0, 0, 1, 0, 0);
+  c.clearRect(0, 0, W, H);
+  const size = H * 0.62;
+  font(c, F.mont, 800, size);
+  CUR = { look, lt: t, dur: 3, k: H / 70 };
+  try { text(c, "Aa", W / 2, H / 2 + size * 0.04, { size, fill: "#ffffff" }); } finally { CUR = null; }
 }
 
 // ---------- bounds (for clicking and the selection box) ----------
@@ -561,7 +697,7 @@ let mctx;
  * finished: { x0, y0, x1, y1 } in 1920-wide pixels. Cached per title content.
  */
 export function titleBox(T) {
-  const key = JSON.stringify([T.tpl, T.lines, T.font]);
+  const key = JSON.stringify([T.tpl, T.lines, T.font, T.look]);
   const hit = boxCache.get(key);
   if (hit) return hit;
   const S = 2400, H = 1600;

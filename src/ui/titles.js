@@ -2,7 +2,7 @@
 // for editing one. A title is a layer on the text tracks: drag it in the player, trim it on the timeline.
 import { useEffect, useRef } from "react";
 import { getState, setState, edit, editLive, uid, findItem, defaultTextStyle, checkpoint } from "../store.js";
-import { TITLE_TEMPLATES, TITLE_CATEGORIES, titleTemplate, newTitle, titlePos, titleFonts, drawTitle, titleBox, resetTitleBoxes } from "../titles.js";
+import { TITLE_TEMPLATES, TITLE_CATEGORIES, titleTemplate, newTitle, titlePos, titleFonts, drawTitle, titleBox, resetTitleBoxes, TEXTURE_NAMES, drawStyleSample } from "../titles.js";
 import { FONTS, loadFont } from "./fonts.js";
 import { html, Field, Section, Slider } from "./kit.js";
 import { setting } from "../settings.js";
@@ -125,5 +125,116 @@ export function TitleFields({ t }) {
       <label class="check"><input type="checkbox" checked=${!T.noOut} onChange=${(e) => set((x) => { if (e.target.checked) delete x.noOut; else x.noOut = true; })} />
         Animate out at the end</label>
     <//>
+  </div>`;
+}
+
+// ---------- Style tab: fills, outlines, shadows and glows ----------
+
+const solid = (c1) => ({ fill: { type: "solid", c1 } });
+const grad = (c1, c2, angle = 90) => ({ fill: { type: "gradient", c1, c2, angle } });
+const karaoke = (c1, outline) => ({ fill: { type: "karaoke", c1, c2: "#ffffff" }, stroke: { on: true, color: outline, width: 6, blur: 0 },
+  shadow: { on: true, color: "#000000", opacity: 0.5, angle: 90, dist: 4, blur: 6 }, glow: { on: false } });
+/** Preset groups. Each preset only replaces the parts it names (fill / stroke / shadow / glow), so they combine. */
+export const STYLE_PRESETS = [
+  ["Fills & gradients", [
+    ["Template", { fill: { type: "template" } }], ["White", solid("#ffffff")], ["Yellow", solid("#ffe14d")], ["Black", solid("#111111")],
+    ["Sunset", grad("#ffb02e", "#ff3c8e")], ["Ocean", grad("#3df2ff", "#3d5bff")], ["Mint", grad("#d4ff6b", "#1fcf9a")],
+    ["Candy", grad("#ff7ad9", "#8b6bff", 0)], ["Fire", grad("#ffe14d", "#ff2d2d")], ["Ice", grad("#ffffff", "#5ec8ff")],
+  ]],
+  ["Textures", TEXTURE_NAMES.map(([id, name]) => [name, { fill: { type: "texture", texture: id } }])],
+  ["Lyrics & karaoke", [
+    ["Lyrics classic", { ...solid("#ffffff"), stroke: { on: true, color: "#000000", width: 5, blur: 0 }, shadow: { on: true, color: "#000000", opacity: 0.6, angle: 90, dist: 4, blur: 8 }, glow: { on: false } }],
+    ["Lyrics soft", { ...solid("#ffffff"), stroke: { on: false }, shadow: { on: false }, glow: { on: true, color: "#000000", size: 22, strength: 3 } }],
+    ["Lyrics neon", { ...solid("#ffffff"), stroke: { on: false }, shadow: { on: false }, glow: { on: true, color: "#ff3cac", size: 26, strength: 2 } }],
+    ["Lyrics yellow", { ...solid("#ffe14d"), stroke: { on: true, color: "#1a1a1a", width: 6, blur: 0 }, shadow: { on: false }, glow: { on: false } }],
+    ["Karaoke blue", karaoke("#3df2ff", "#0a1a3a")], ["Karaoke pink", karaoke("#ff3cac", "#2a0a1e")], ["Karaoke gold", karaoke("#ffd23f", "#2b1a00")],
+  ]],
+  ["Outlines", [
+    ["None", { stroke: { on: false } }], ["Thin black", { stroke: { on: true, color: "#000000", width: 3, blur: 0 } }],
+    ["Thick black", { stroke: { on: true, color: "#000000", width: 10, blur: 0 } }], ["White", { stroke: { on: true, color: "#ffffff", width: 6, blur: 0 } }],
+    ["Soft blur", { stroke: { on: true, color: "#000000", width: 8, blur: 6 } }], ["Neon", { stroke: { on: true, color: "#00f0ff", width: 4, blur: 3 } }],
+  ]],
+  ["Shadows & glows", [
+    ["None", { shadow: { on: false }, glow: { on: false } }],
+    ["Drop shadow", { shadow: { on: true, color: "#000000", opacity: 0.6, angle: 45, dist: 8, blur: 10 } }],
+    ["Soft shadow", { shadow: { on: true, color: "#000000", opacity: 0.7, angle: 90, dist: 4, blur: 22 } }],
+    ["Hard shadow", { shadow: { on: true, color: "#000000", opacity: 1, angle: 45, dist: 12, blur: 0 } }],
+    ["White glow", { glow: { on: true, color: "#ffffff", size: 24, strength: 2 } }],
+    ["Pink glow", { glow: { on: true, color: "#ff3cac", size: 30, strength: 2 } }],
+    ["Cyan glow", { glow: { on: true, color: "#00f0ff", size: 30, strength: 2 } }],
+  ]],
+];
+
+function StyleSwatch({ look }) {
+  const ref = useRef();
+  useEffect(() => { drawStyleSample(ref.current.getContext("2d"), look, 84, 46); }, [look]);
+  return html`<canvas ref=${ref} width="84" height="46" class="style-swatch" aria-hidden="true" />`;
+}
+// Keyed by group too: "White" and "None" exist in more than one group.
+const presetLooks = new Map(STYLE_PRESETS.flatMap(([group, list]) => list.map(([name, p]) => [`${group}|${name}`, { ...p }])));
+
+/** The Style tab of a title: presets, then fill, outline, shadow and glow controls. */
+export function TitleStyleFields({ t }) {
+  const look = t.title.look || {};
+  const set = (fn, live) => (live ? editLive : edit)((p) => {
+    const x = findItem(p, "text", t.id);
+    if (!x) return;
+    const l = { ...(x.title.look || {}) };
+    fn(l);
+    x.title = { ...x.title, look: l };
+  });
+  const part = (key) => look[key] || {};
+  const put = (key, k, v, live) => set((l) => (l[key] = { ...(l[key] || {}), [k]: v }), live);
+  const apply = (p) => set((l) => Object.assign(l, structuredClone(p)));
+  const fill = part("fill"), stroke = part("stroke"), shadow = part("shadow"), glow = part("glow");
+  const ftype = fill.type || "template";
+  const num = (key, k, label, min, max, step, def, format) => html`<${Slider} label=${label} value=${part(key)[k] ?? def} min=${min} max=${max} step=${step}
+    format=${format || ((v) => String(Math.round(v)))} onChange=${(v, live) => put(key, k, v, live)} />`;
+  const colour = (key, k, label, def) => html`<${Field} label=${label}><input type="color" value=${part(key)[k] || def} onChange=${(e) => put(key, k, e.target.value)} /><//>`;
+  const toggle = (key, label, defaults) => html`<label class="check"><input type="checkbox" checked=${!!part(key).on}
+    onChange=${(e) => set((l) => (l[key] = { ...defaults, ...(l[key] || {}), on: e.target.checked }))} /> ${label}</label>`;
+  return html`<div class="title-style">
+    ${STYLE_PRESETS.map(([group, list]) => html`<${Section} key=${group} title=${group} open=${group !== "Textures"}>
+      <div class="style-grid">
+        ${list.map(([name]) => html`<button key=${name} class="style-chip" title=${`${group}: ${name}`} onClick=${() => apply(presetLooks.get(`${group}|${name}`))}>
+          <${StyleSwatch} look=${presetLooks.get(`${group}|${name}`)} /><span>${name}</span></button>`)}
+      </div>
+    <//>`)}
+    <${Section} title="Fill">
+      <${Field} label="Fill">
+        <select value=${ftype} onChange=${(e) => put("fill", "type", e.target.value)}>
+          <option value="template">Template's own</option><option value="solid">Solid colour</option><option value="gradient">Two-colour gradient</option>
+          <option value="texture">Texture</option><option value="karaoke">Karaoke (sung colour sweeps across)</option>
+        </select>
+      <//>
+      ${ftype === "solid" && colour("fill", "c1", "Colour", "#ffffff")}
+      ${ftype === "gradient" && html`<div class="grid2">${colour("fill", "c1", "From", "#ffb02e")}${colour("fill", "c2", "To", "#ff3c8e")}</div>
+        ${num("fill", "angle", "Direction", 0, 360, 1, 90, (v) => `${Math.round(v)}°`)}`}
+      ${ftype === "texture" && html`<${Field} label="Texture">
+        <select value=${fill.texture || "gold"} onChange=${(e) => put("fill", "texture", e.target.value)}>
+          ${TEXTURE_NAMES.map(([id, name]) => html`<option key=${id} value=${id}>${name}</option>`)}
+        </select><//>`}
+      ${ftype === "karaoke" && html`<div class="grid2">${colour("fill", "c1", "Sung", "#3df2ff")}${colour("fill", "c2", "Not sung yet", "#ffffff")}</div>
+        <p class="muted small">The sung colour sweeps across the words during the title's time on the timeline: trim the title to the line's length (Match audio length helps).</p>`}
+    <//>
+    <${Section} title="Outline">
+      ${toggle("stroke", "Outline", { color: "#000000", width: 6, blur: 0 })}
+      ${stroke.on && html`${colour("stroke", "color", "Colour", "#000000")}
+        ${num("stroke", "width", "Thickness", 0, 30, 0.5, 6)}${num("stroke", "blur", "Blur", 0, 20, 0.5, 0)}`}
+    <//>
+    <${Section} title="Shadow">
+      ${toggle("shadow", "Drop shadow", { color: "#000000", opacity: 0.6, angle: 45, dist: 8, blur: 10 })}
+      ${shadow.on && html`${colour("shadow", "color", "Colour", "#000000")}
+        ${num("shadow", "opacity", "Opacity", 0, 1, 0.01, 0.6, (v) => `${Math.round(v * 100)}%`)}
+        ${num("shadow", "angle", "Angle", -180, 180, 1, 45, (v) => `${Math.round(v)}°`)}
+        ${num("shadow", "dist", "Distance", 0, 60, 0.5, 8)}${num("shadow", "blur", "Blur", 0, 60, 0.5, 10)}`}
+    <//>
+    <${Section} title="Glow">
+      ${toggle("glow", "Outer glow", { color: "#ffffff", size: 24, strength: 2 })}
+      ${glow.on && html`${colour("glow", "color", "Colour", "#ffffff")}
+        ${num("glow", "size", "Size", 0, 80, 1, 24)}${num("glow", "strength", "Strength", 1, 4, 1, 2)}`}
+    <//>
+    ${t.title.look && html`<button class="wide" onClick=${() => edit((p) => { const x = findItem(p, "text", t.id); if (x) { x.title = { ...x.title }; delete x.title.look; } })}>
+      Back to the template's own style</button>`}
   </div>`;
 }

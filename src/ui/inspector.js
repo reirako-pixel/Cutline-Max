@@ -24,7 +24,7 @@ import { lastDur, rememberDur } from "../settings.js";
 import { copySettings, pasteSettings } from "../actions.js";
 import { ShapeFields, shapeName } from "./shapes.js";
 import { VizFields, BeatSyncSection } from "./visualizer.js";
-import { TitleFields } from "./titles.js";
+import { TitleFields, TitleStyleFields } from "./titles.js";
 import { titleName } from "../titles.js";
 import { vizStyleName } from "../vizdraw.js";
 
@@ -687,7 +687,8 @@ function VizInspector({ t }) {
 /** A title template layer: its words, colours, font and timing, position, and extra animation. */
 function TitleInspector({ t }) {
   const [tab, setTab] = useState("title");
-  return html`<${Shell} tabs=${[["title", "Title"], ["animate", "Animation"]]} tab=${tab} setTab=${setTab} note=${titleName(t.title.tpl)}>
+  return html`<${Shell} tabs=${[["title", "Title"], ["style", "Style"], ["animate", "Animation"]]} tab=${tab} setTab=${setTab} note=${titleName(t.title.tpl)}>
+    ${tab === "style" && html`<${TitleStyleFields} key=${t.id} t=${t} />`}
     ${tab === "title" && html`
       <${TitleFields} key=${t.id} t=${t} />
       <${TransformSection} kind="text" id=${t.id} />
