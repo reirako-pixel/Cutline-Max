@@ -26,6 +26,8 @@ import { Timeline, dragGesture, setToggle } from "./ui/timeline.js";
 import { MaskHandles, CropBox } from "./ui/mask.js";
 import { ShapesTab } from "./ui/shapes.js";
 import { VisualizerTab } from "./ui/visualizer.js";
+import { TitlesTab } from "./ui/titles.js";
+import { TITLE_CATEGORIES } from "./titles.js";
 import { SettingsDialog } from "./ui/settings.js";
 import { UpdateBar, startUpdateChecks } from "./ui/updates.js";
 import { cacheGet, cacheSet, mediaKey } from "./cache.js";
@@ -229,6 +231,7 @@ const LIB_TABS = [
   ["audio", "Audio", "music"],
   ["visualizer", "Visualizer", "audio-waveform"],
   ["text", "Text", "type"],
+  ["titles", "Titles", "heading"],
   ["effects", "Effects", "sparkles"],
   ["transitions", "Transitions", "arrow-left-right"],
   ["captions", "Captions", "captions"],
@@ -248,6 +251,7 @@ const SUB_NAV = {
   filters: [["all", "Filters"]],
   adjust: [["layer", "Adjustment layer"]],
   visualizer: [["all", "All"], ["bars", "Bars"], ["lines", "Lines"], ["round", "Circles"], ["particles", "Particles"]],
+  titles: TITLE_CATEGORIES,
 };
 
 function LeftPanel() {
@@ -271,6 +275,7 @@ function LeftPanel() {
         ${tab === "elements" && html`<${ElementsTab} />`}
         ${tab === "shapes" && html`<${ShapesTab} part=${sub} />`}
         ${tab === "visualizer" && html`<${VisualizerTab} part=${sub} />`}
+        ${tab === "titles" && html`<${TitlesTab} part=${sub} />`}
         ${tab === "audio" && (sub === "mine" ? html`<${AudioPresetsTab} />` : html`<${AudioTab} part=${sub} />`)}
         ${tab === "text" && (sub === "captions" ? html`<${CaptionsForm} />` : html`<${TextTab} part=${sub} />`)}
         ${tab === "effects" && html`<${EffectsTab} cat=${+sub} />`}

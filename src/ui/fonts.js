@@ -1,6 +1,7 @@
 // Title fonts: Cutline's own list (system fonts work offline; the rest are Google Fonts, SIL Open Font License,
 // loaded on demand) plus every font installed on this computer (Local Font Access API).
 import { setState } from "../store.js";
+import { titleFonts, resetTitleBoxes } from "../titles.js";
 
 export const FONTS = [
   { name: "Inter", css: "Inter, Arial, sans-serif", web: "Inter:wght@300..900" },
@@ -58,7 +59,10 @@ export function loadFont(css, weight = 400, italic = false) {
 
 /** Loads every font a project's texts use (call before export). */
 export function loadProjectFonts(project) {
-  return Promise.all(project.texts.map((t) => loadFont(t.style.font, t.style.weight, t.style.italic)));
+  const titles = project.texts.filter((t) => t.title).flatMap((t) => titleFonts(t.title)).map((css) => [css, 400, false]);
+  const extra = titles.flatMap(([css]) => [700, 800].map((w) => [css, w, false]));
+  return Promise.all([...project.texts.filter((t) => !t.title).map((t) => [t.style.font, t.style.weight, t.style.italic]), ...titles, ...extra]
+    .map(([css, w, it]) => loadFont(css, w, it))).then(() => resetTitleBoxes());
 }
 
 /** CSS font-family value for an installed font family. */

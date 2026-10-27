@@ -10,6 +10,7 @@ import { needsLiveRoute, routeLive, isRouted } from "./audiofx.js";
 import { levelFor } from "./media-audio.js";
 import { meanSpeed, sourceAt, rateAt } from "./speed.js";
 import { drawVizStyle } from "./vizdraw.js";
+import { drawTitle, titleBox } from "./titles.js";
 import { levelAt, beatAt } from "./vizdata.js";
 
 /** Timeline time of the frame being drawn (visualizers and beat sync read the music at this moment). */
@@ -681,6 +682,25 @@ function drawViz(ctx, item, a, tr, W, H) {
   ctx.restore();
 }
 
+/** A title template, drawn on its own layer (so its light sweeps and shines stay inside its letters). */
+function drawTitleLayer(ctx, item, lt, a, tr, W, H) {
+  const L = scratch(42, W, H);
+  L.setTransform(1, 0, 0, 1, 0, 0);
+  L.globalAlpha = 1; L.globalCompositeOperation = "source-over"; L.filter = "none";
+  L.clearRect(0, 0, W, H);
+  L.save();
+  L.translate(tr.x * W + a.dx * W, tr.y * H + a.dy * H);
+  L.rotate((tr.rotation * Math.PI) / 180);
+  L.scale(a.scale * tr.scale, a.scale * tr.scale);
+  drawTitle(L, item.title, lt, item.dur, W / 1920);
+  L.restore();
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = a.alpha * tr.opacity;
+  ctx.drawImage(L.canvas, 0, 0);
+  ctx.restore();
+}
+
 /** Draws a shape layer's shape at the origin (the caller has applied position, rotation and scale). */
 function drawShape(c, s, k) {
   const { w, h } = shapeSize(s, k);
@@ -723,6 +743,14 @@ export function itemBounds(project, kind, item, W, H, t) {
     const r = (tr.rotation * Math.PI) / 180;
     const dx = ox * Math.cos(r) - oy * Math.sin(r), dy = ox * Math.sin(r) + oy * Math.cos(r);
     return { cx: tr.x + dx / W, cy: tr.y + dy / H, w: (fw * (1 - c.l - c.r)) / W, h: (fh * (1 - c.t - c.b)) / H, rotation: tr.rotation };
+  }
+  if (item.title) {
+    // The measured extent around the anchor (which may sit at the left, for lower thirds), turned with the title.
+    const tr = t == null ? { x: item.x, y: item.y, scale: item.scale || 1, rotation: item.rotation || 0 } : transformAt(item, lt, true);
+    const b = titleBox(item.title), k = (W / 1920) * tr.scale;
+    const ox = ((b.x0 + b.x1) / 2) * k, oy = ((b.y0 + b.y1) / 2) * k, r = (tr.rotation * Math.PI) / 180;
+    return { cx: tr.x + (ox * Math.cos(r) - oy * Math.sin(r)) / W, cy: tr.y + (ox * Math.sin(r) + oy * Math.cos(r)) / H,
+      w: ((b.x1 - b.x0) * k) / W, h: ((b.y1 - b.y0) * k) / H, rotation: tr.rotation };
   }
   if (item.viz) {
     const tr = t == null ? { x: item.x, y: item.y, scale: item.scale || 1, rotation: item.rotation || 0 } : transformAt(item, lt, true);
@@ -772,6 +800,7 @@ export function drawText(ctx, item, t, W, H) {
   const tr = transformAt(item, lt, true);
   if (tr.opacity <= 0) return;
   if (item.viz) { drawViz(ctx, item, a, tr, W, H); return; }
+  if (item.title) { drawTitleLayer(ctx, item, lt, a, tr, W, H); return; }
   const size = st.size * (W / 1920);
   ctx.save();
   ctx.globalAlpha = a.alpha * tr.opacity;

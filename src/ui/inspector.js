@@ -24,6 +24,8 @@ import { lastDur, rememberDur } from "../settings.js";
 import { copySettings, pasteSettings } from "../actions.js";
 import { ShapeFields, shapeName } from "./shapes.js";
 import { VizFields, BeatSyncSection } from "./visualizer.js";
+import { TitleFields } from "./titles.js";
+import { titleName } from "../titles.js";
 import { vizStyleName } from "../vizdraw.js";
 
 /** "Save as preset": keeps this text's whole look for one-click reuse (Text tab › My presets). */
@@ -682,7 +684,25 @@ function VizInspector({ t }) {
   <//>`;
 }
 
+/** A title template layer: its words, colours, font and timing, position, and extra animation. */
+function TitleInspector({ t }) {
+  const [tab, setTab] = useState("title");
+  return html`<${Shell} tabs=${[["title", "Title"], ["animate", "Animation"]]} tab=${tab} setTab=${setTab} note=${titleName(t.title.tpl)}>
+    ${tab === "title" && html`
+      <${TitleFields} key=${t.id} t=${t} />
+      <${TransformSection} kind="text" id=${t.id} />
+      <${Section} title="Opacity">
+        <${KSlider} kind="text" id=${t.id} path="opacity" label="Opacity" min=${0} max=${1} fallback=${1} format=${pct} />
+      <//>`}
+    ${tab === "animate" && html`<p class="muted">The title already animates in and out by itself (Title › Animation sets its speed). These add an extra animation on top.</p>
+      <${AnimateSection} kind="text" item=${t} />`}
+    <${MatchAudioButton} kind="text" item=${t} />
+    <button class="danger wide" onClick=${deleteSelection}><${Icon} n="trash-2" /> Delete</button>
+  <//>`;
+}
+
 function TextInspector({ t }) {
+  if (t.title) return html`<${TitleInspector} t=${t} />`;
   if (t.viz) return html`<${VizInspector} t=${t} />`;
   if (t.shape) return html`<${ShapeInspector} t=${t} />`;
   return html`<${TextInspectorBody} t=${t} />`;
