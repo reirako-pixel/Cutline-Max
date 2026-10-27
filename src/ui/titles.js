@@ -4,7 +4,8 @@ import { useEffect, useRef } from "react";
 import { getState, setState, edit, editLive, uid, findItem, defaultTextStyle, checkpoint } from "../store.js";
 import { TITLE_TEMPLATES, TITLE_CATEGORIES, titleTemplate, newTitle, titlePos, titleFonts, drawTitle, titleBox, resetTitleBoxes, TEXTURE_NAMES, drawStyleSample, titleIsBoxed } from "../titles.js";
 import { FONTS, loadFont } from "./fonts.js";
-import { html, Field, Section, Slider, KSlider } from "./kit.js";
+import { html, Field, Section, Slider, KSlider, Icon } from "./kit.js";
+import { RichText } from "./richtext.js";
 import { setting } from "../settings.js";
 
 // Text measured before a web font arrives has the wrong width: measure again once fonts load.
@@ -103,7 +104,9 @@ export function TitleFields({ t }) {
     <//>
     <${Section} title="Text">
       ${d.lines.map((_, i) => html`<${Field} key=${i} label=${d.labels?.[i] || (d.lines.length > 1 ? `Line ${i + 1}` : "Text")}>
-        <input class="title-line" value=${T.lines?.[i] ?? ""} onFocus=${() => checkpoint()} onInput=${(e) => set((x) => (x.lines[i] = e.target.value), true)} />
+        <${RichText} value=${T.lines?.[i] ?? ""} runs=${T.spans?.[i]} baseColor=${T.lineColor?.[i] || T.colorA}
+          onChange=${(v, runs, live) => set((x) => { x.lines[i] = v; const sp = [...(x.spans || [])]; sp[i] = runs?.length ? runs : null; x.spans = sp; }, live)}
+          onRuns=${(runs, live) => set((x) => { const sp = [...(x.spans || [])]; sp[i] = runs.length ? runs : null; x.spans = sp; }, live)} />
       <//>`)}
       <${Field} label="Font">
         <select value=${fontValue} onChange=${(e) => { set((x) => { if (e.target.value) x.font = e.target.value; else delete x.font; }); loadFont(e.target.value || d.font, 700); loadFont(e.target.value || d.font, 800); setTimeout(resetTitleBoxes, 600); }}>
@@ -209,7 +212,13 @@ export function TitleStyleFields({ t }) {
       <${KSlider} kind="text" id=${t.id} path="scale" label="Size" min=${0.1} max=${4} fallback=${1} format=${(v) => `${Math.round(v * 100)}%`} />
       ${d.lines.length > 1 && !boxed && d.lines.map((_, i) => html`<${Slider} key=${"s" + i} label=${`${lineLabel(i)} size`} value=${t.title.lineScale?.[i] || 1}
         min=${0.3} max=${3} step=${0.01} format=${(v) => `${Math.round(v * 100)}%`} onChange=${(v, live) => perLine("lineScale", i, v, live)} />`)}
-      ${d.lines.length > 1 && boxed && html`<p class="muted small">This design keeps its text in boxes, so its lines can't be sized one by one. Size above resizes the whole title.</p>`}
+      ${d.lines.length > 1 && boxed && html`<p class="muted small">This design keeps its text in boxes, so its lines can't be sized or aligned one by one. Size above resizes the whole title.</p>`}
+      ${d.lines.length > 1 && !boxed && html`<div class="title-align" role="group" aria-label="Align the title's lines">
+        <span>Align</span>
+        ${[[null, "Template", "layout-template"], ["left", "Left", "align-left"], ["center", "Center", "align-center"], ["right", "Right", "align-right"], ["justify", "Justify", "align-justify"]]
+          .map(([v, label, icon]) => html`<button key=${label} class=${"ibtn" + ((t.title.align || null) === v ? " on" : "")} title=${v ? `${label}: ${{ left: "line up the lines on the left", center: "centre every line", right: "line up the lines on the right", justify: "stretch every line to the same width" }[v]}` : "The template's own layout"}
+            onClick=${() => edit((p) => { const x = findItem(p, "text", t.id); if (x) { x.title = { ...x.title }; if (v) x.title.align = v; else delete x.title.align; } })}><${Icon} n=${icon} /></button>`)}
+      </div>`}
       <div class="line-colors">
         ${d.lines.map((_, i) => html`<div key=${"c" + i} class="line-color">
           <span>${lineLabel(i)} colour</span>
@@ -259,9 +268,9 @@ export function TitleStyleFields({ t }) {
       ${glow.on && html`${colour("glow", "color", "Colour", "#ffffff")}
         ${num("glow", "size", "Size", 0, 80, 1, 24)}${num("glow", "strength", "Strength", 1, 4, 1, 2)}`}
     <//>
-    ${(t.title.look || t.title.lineColor?.some(Boolean) || t.title.lineScale?.some((v) => v && v !== 1)) && html`<button class="wide" onClick=${() => edit((p) => {
+    ${(t.title.look || t.title.align || t.title.lineColor?.some(Boolean) || t.title.lineScale?.some((v) => v && v !== 1)) && html`<button class="wide" onClick=${() => edit((p) => {
       const x = findItem(p, "text", t.id);
-      if (x) { x.title = { ...x.title }; delete x.title.look; delete x.title.lineColor; delete x.title.lineScale; }
+      if (x) { x.title = { ...x.title }; delete x.title.look; delete x.title.lineColor; delete x.title.lineScale; delete x.title.align; }
     })}>Back to the template's own style</button>`}
   </div>`;
 }

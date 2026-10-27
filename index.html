@@ -266,6 +266,18 @@
     .line-color { display: grid; grid-template-columns: minmax(0, 1fr) 64px 58px; gap: 8px; align-items: center; }
     .line-color input[type=color] { height: 28px; }
     .line-color > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .title-align { display: flex; align-items: center; gap: 2px; margin: 6px 0 4px; }
+    .title-align > span { flex: 1; }
+    .title-align .ibtn { width: 34px; height: 30px; border-radius: 6px; }
+    .title-align .ibtn.on { background: var(--panel2); box-shadow: inset 0 0 0 1px var(--accent); }
+    .rich { display: grid; gap: 4px; }
+    .rich textarea, .rich input { width: 100%; }
+    .rich-bar { display: flex; align-items: center; gap: 8px; min-height: 30px; }
+    .rich-sel { flex: 1; min-width: 0; color: var(--text); }
+    .rich-color { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+    .rich-color input[type=color] { width: 44px; height: 26px; }
+    .rich-preview { display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: var(--bg); border-radius: 6px; }
+    .rich-preview-text { flex: 1; min-width: 0; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
     .fit-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 4px 0 2px; }
     .fit-row button { display: flex; gap: 6px; align-items: center; justify-content: center; }
     .viz-busy { font-weight: 400; margin-left: 8px; display: inline-flex; gap: 6px; align-items: center; }

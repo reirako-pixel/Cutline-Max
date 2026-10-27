@@ -25,6 +25,7 @@ import { copySettings, pasteSettings } from "../actions.js";
 import { ShapeFields, shapeName } from "./shapes.js";
 import { VizFields, BeatSyncSection } from "./visualizer.js";
 import { TitleFields, TitleStyleFields } from "./titles.js";
+import { RichText } from "./richtext.js";
 import { titleName } from "../titles.js";
 import { vizStyleName } from "../vizdraw.js";
 
@@ -736,7 +737,9 @@ function TextInspectorBody({ t }) {
     <${SavePreset} t=${t} />
     <${RememberText} t=${t} />
     ${tab === "text" && html`
-      <textarea rows="3" value=${t.text} onChange=${(e) => set((x) => { x.text = e.target.value; delete x.words; })} />
+      <${RichText} multiline value=${t.text} runs=${t.caption && t.words ? null : t.spans} baseColor=${st.color}
+        onChange=${(v, runs, live) => set((x) => { x.text = v; delete x.words; if (runs?.length) x.spans = runs; else delete x.spans; }, live)}
+        onRuns=${(runs, live) => set((x) => { delete x.words; if (runs.length) x.spans = runs; else delete x.spans; }, live)} />
       ${t.caption && t.words && html`<p class="muted">Editing the text removes word-by-word highlighting for this caption.</p>`}
       <${LineBreaks} t=${t} />
       <${TextFontFields} st=${st} setSt=${setSt} />

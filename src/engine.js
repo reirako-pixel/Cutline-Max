@@ -11,6 +11,7 @@ import { levelFor } from "./media-audio.js";
 import { meanSpeed, sourceAt, rateAt } from "./speed.js";
 import { drawVizStyle } from "./vizdraw.js";
 import { drawTitle, titleBox } from "./titles.js";
+import { charStyles } from "./spans.js";
 import { levelAt, beatAt } from "./vizdata.js";
 
 /** Timeline time of the frame being drawn (visualizers and beat sync read the music at this moment). */
@@ -768,9 +769,9 @@ export function itemBounds(project, kind, item, W, H, t) {
   m.font = textFont(st, size);
   const lines = wrap(m, applyCase(item.text, st), wrapWidth(item, W));
   const pad = st.bg ? size * (st.bgPad ?? 0.6) : size * 0.2;
-  const spacing = (st.letterSpacing || 0) * size;
-  const tw = Math.max(...lines.map((l) => m.measureText(l).width + Math.max(0, l.length - 1) * spacing)) + pad;
-  const th = lines.length * size * (st.lineHeight || 1.2) + size * 0.2;
+  const lay = textLayout(m, item, st, lines, size);
+  const tw = lay.maxW + pad;
+  const th = lay.total + size * 0.2;
   const tr = t == null ? { x: item.x, y: item.y, scale: item.scale || 1, rotation: item.rotation || 0 } : transformAt(item, lt, true);
   return { cx: tr.x, cy: tr.y, w: (tw * tr.scale) / W, h: (th * tr.scale) / H, rotation: tr.rotation };
 }
@@ -820,17 +821,14 @@ export function drawText(ctx, item, t, W, H) {
   let full = applyCase(words.map((w) => w.w).join(""), st);
   if (a.reveal < 1) full = full.slice(0, Math.round(full.length * a.reveal));
   const lines = wrap(ctx, full, wrapWidth(item, W));
-  const lh = size * (st.lineHeight || 1.2);
-  const y0 = -((lines.length - 1) * lh) / 2;
-  const spacing = (st.letterSpacing || 0) * size;
-  const lineW = (l) => ctx.measureText(l).width + Math.max(0, [...l].length - 1) * spacing;
-  const maxW = Math.max(...lines.map(lineW));
+  const lay = textLayout(ctx, item, st, lines, size);
+  const { maxW, spacing, styles } = lay;
 
   if (st.bg) {
     const pad = size * (st.bgPad ?? 0.6);
     const bw = maxW + pad;
     ctx.fillStyle = st.bg;
-    roundRect(ctx, -bw / 2, y0 - lh / 2 - size * 0.15, bw, lines.length * lh + size * 0.3, size * (st.bgRadius ?? 0.25));
+    roundRect(ctx, -bw / 2, lay.top - size * 0.15, bw, lay.total + size * 0.3, size * (st.bgRadius ?? 0.25));
     ctx.fill();
   }
 
@@ -857,8 +855,8 @@ export function drawText(ctx, item, t, W, H) {
   };
 
   lines.forEach((line, li) => {
-    const y = y0 + li * lh;
-    const lw = lineW(line);
+    const y = lay.ys[li];
+    const lw = lay.widths[li];
     let x = st.align === "left" ? -maxW / 2 : st.align === "right" ? maxW / 2 - lw : -lw / 2;
     ctx.textAlign = "left";
     if (st.underline && lw > 0) {
@@ -868,24 +866,67 @@ export function drawText(ctx, item, t, W, H) {
       setShadow(false);
     }
     for (const ch of line) {
+      // A selected part of the text can have its own colour and size (Text box › select › colour / size).
+      const own = styles?.[charIndex];
+      const sc = own?.scale || 1;
+      if (sc !== 1) ctx.font = textFont(st, size * sc);
       const cw = ctx.measureText(ch).width;
+      // Bigger letters sit on the same baseline as the rest of the line.
+      const cy = sc !== 1 ? y - size * 0.36 * (sc - 1) : y;
       const hl = activeRange && charIndex >= activeRange[0] && charIndex < activeRange[1];
       setShadow(true);
       if (st.strokeWidth > 0) {
         ctx.strokeStyle = st.stroke;
         ctx.lineWidth = st.strokeWidth * (W / 1920) * 2;
-        ctx.strokeText(ch, x, y);
+        ctx.strokeText(ch, x, cy);
         setShadow(false);
       }
-      ctx.fillStyle = hl ? st.highlight : st.color;
-      ctx.fillText(ch, x, y);
+      ctx.fillStyle = hl ? st.highlight : own?.color || st.color;
+      ctx.fillText(ch, x, cy);
       setShadow(false);
+      if (sc !== 1) ctx.font = textFont(st, size);
       x += cw + spacing;
-      charIndex++;
+      charIndex += ch.length;
     }
     charIndex++; // the space consumed by wrapping
   });
   ctx.restore();
+}
+
+/**
+ * Line widths and heights of a text, allowing for parts with their own size (item.spans): a line with bigger
+ * letters is taller, and the block is centred on the text's position. ctx must have the text's font set.
+ */
+function textLayout(ctx, item, st, lines, size) {
+  const spacing = (st.letterSpacing || 0) * size;
+  const lh = size * (st.lineHeight || 1.2);
+  const n = lines.reduce((acc, l) => acc + l.length + 1, 0);
+  const styles = item.spans?.length && !item.words?.length ? charStyles(item.spans, n) : null;
+  const widths = [], heights = [];
+  let idx = 0;
+  for (const l of lines) {
+    let w = 0, maxSc = 1, count = 0;
+    if (!styles) w = ctx.measureText(l).width;
+    else {
+      for (const ch of l) {
+        const sc = styles[idx]?.scale || 1;
+        if (sc !== 1) { ctx.font = textFont(st, size * sc); maxSc = Math.max(maxSc, sc); }
+        w += ctx.measureText(ch).width;
+        if (sc !== 1) ctx.font = textFont(st, size);
+        idx += ch.length;
+      }
+      idx++;
+    }
+    count = [...l].length;
+    widths.push(w + Math.max(0, count - 1) * spacing);
+    heights.push(lh * maxSc);
+  }
+  const total = heights.reduce((a, b) => a + b, 0);
+  const top = -total / 2;
+  const ys = [];
+  let acc = top;
+  for (const h of heights) { ys.push(acc + h / 2 + (h - lh) * 0.18); acc += h; }
+  return { lh, spacing, styles, widths, heights, total, top, ys, maxW: Math.max(0, ...widths) };
 }
 
 /**

@@ -1,3 +1,4 @@
+import { charStyles } from "./spans.js";
 // Title templates (Library › Titles). A title is one layer on the text tracks, like a shape or visualizer:
 // item.title = { tpl, lines: [...], colorA, colorB, font?, speed? }. Each template draws itself centred on its
 // anchor (the item's x / y), with its own intro and outro, so it moves, scales, rotates and trims as one piece.
@@ -158,18 +159,71 @@ const rel = (c) => CUR.root.inverse().multiply(c.getTransform());
 /** Measuring pass: where each line sits (in the title's own pixels) before any change. */
 function recordLine(c, li, s, x, y, sp, size, align) {
   if (CUR.lay.rec[li]) return;
-  c.letterSpacing = `${(sp * size).toFixed(2)}px`;
-  const w = Math.max(0, c.measureText(s).width - sp * size);
-  c.letterSpacing = "0px";
+  const w = lineWidth(c, s, sp, size, li);
   const x0 = align === "center" ? x - w / 2 : align === "right" ? x - w : x;
-  const M = rel(c);
-  CUR.lay.rec[li] = { x0: M.a * x0 + M.c * y + M.e, y: M.b * x0 + M.d * y + M.f, w: w * Math.abs(M.a || 1), h: size * Math.abs(M.d || 1) };
+  const M = rel(c), sx = Math.abs(M.a || 1);
+  const ax = align === "center" ? x0 + w / 2 : align === "right" ? x0 + w : x0; // the point the line grows from
+  CUR.lay.rec[li] = { x0: M.a * x0 + M.c * y + M.e, ax: M.a * ax + M.c * y + M.e, y: M.b * x0 + M.d * y + M.f, w: w * sx, h: size * Math.abs(M.d || 1) };
 }
 
-/** From the measured lines: each line's move (dy) and size factor f, in the title's pixels. */
+// ---------- styled words inside a line (select words in the Text box › colour / size) ----------
+
+const fontSized = (font, sc) => font.replace(/(\d+(?:\.\d+)?)px/, (m) => `${(parseFloat(m) * sc).toFixed(2)}px`);
+/** A line split into parts with the same style: [{ t, st }]. */
+function segments(s, runs) {
+  const arr = charStyles(runs, s.length), out = [];
+  for (let i = 0; i < s.length;) {
+    const st = arr[i];
+    let j = i + 1;
+    while (j < s.length && JSON.stringify(arr[j]) === JSON.stringify(st)) j++;
+    out.push({ t: s.slice(i, j), st });
+    i = j;
+  }
+  return out;
+}
+const runsOf = (li) => (li >= 0 ? CUR?.T?.spans?.[li] : null);
+/** Width of a line (letter spacing `sp` em), counting words that have their own size. */
+function lineWidth(c, s, sp, size, li) {
+  const runs = runsOf(li), base = c.font;
+  let w = 0, lastSc = 1;
+  for (const seg of runs?.length ? segments(s, runs) : [{ t: s, st: null }]) {
+    const sc = seg.st?.scale || 1;
+    c.font = fontSized(base, sc);
+    c.letterSpacing = `${(sp * size * sc).toFixed(2)}px`;
+    w += c.measureText(seg.t).width;
+    lastSc = sc;
+  }
+  c.font = base;
+  c.letterSpacing = "0px";
+  return Math.max(0, w - sp * size * lastSc);
+}
+/** Draws a line part by part: each styled word in its own colour and size, on the same baseline. */
+function plainRuns(c, s, x, y, o, li, runs) {
+  const { sp = 0, size = 10, align = "center", base = "middle" } = o;
+  const total = lineWidth(c, s, sp, size, li), font = c.font;
+  let cx = align === "center" ? x - total / 2 : align === "right" ? x - total : x;
+  for (const seg of segments(s, runs)) {
+    const sc = seg.st?.scale || 1, color = !o.deco && seg.st?.color;
+    c.font = fontSized(font, sc);
+    const yy = sc !== 1 && base === "middle" ? y - size * 0.36 * (sc - 1) : y;
+    const w = plain(c, seg.t, cx, yy, { ...o, align: "left", size: size * sc, fill: color || o.fill, _seg: true, _runColor: !!color }, li);
+    c.letterSpacing = `${(sp * size * sc).toFixed(2)}px`;
+    cx += c.measureText(seg.t).width;
+    c.letterSpacing = "0px";
+    void w;
+  }
+  c.font = font;
+  return total;
+}
+
+/** From the measured lines: each line's move (dx, dy), size factor f and Justify stretch, in the title's pixels. */
 function computeLayout(rec, T) {
   const ids = Object.keys(rec).map(Number);
   const f = (i) => Math.max(0.1, T.lineScale?.[i] || 1);
+  // Each line after resizing (it grows from its anchor), to line them up with each other.
+  const box = {};
+  for (const i of ids) { const r = rec[i]; box[i] = { left: r.ax + (r.x0 - r.ax) * f(i), W: r.w * f(i) }; }
+  const L = Math.min(...ids.map((i) => box[i].left)), R = Math.max(...ids.map((i) => box[i].left + box[i].W));
   const out = {};
   for (const j of ids) {
     // A line that grows pushes the lines below it down and the lines above it up, so they never overlap.
@@ -178,7 +232,13 @@ function computeLayout(rec, T) {
       if (i === j || Math.abs(rec[i].y - rec[j].y) < 1) continue;
       dy += (rec[i].y < rec[j].y ? 1 : -1) * (f(i) - 1) * rec[i].h * 0.55;
     }
-    out[j] = { dy, f: f(j) };
+    const b = box[j];
+    let dx = 0, extra = 0;
+    if (T.align === "left") dx = L - b.left;
+    else if (T.align === "right") dx = R - (b.left + b.W);
+    else if (T.align === "center") dx = (L + R) / 2 - (b.left + b.W / 2);
+    else if (T.align === "justify") { dx = L - b.left; extra = Math.max(0, R - L - b.W); }
+    out[j] = { dx, dy, f: f(j), extra };
   }
   return out;
 }
@@ -188,15 +248,23 @@ function computeLayout(rec, T) {
  * left-aligned ones (lower thirds) from their left edge, so they never slide under a bar beside them.
  */
 function laidOut(c, s, x, y, o, p) {
-  const { sp = 0, size = 10 } = o;
-  const M = rel(c), d = M.d || 1;
-  c.letterSpacing = `${(sp * size).toFixed(2)}px`;
-  const w = Math.max(0, c.measureText(s).width - sp * size);
-  c.letterSpacing = "0px";
+  const { sp = 0, size = 10, align = "center" } = o;
+  const li = lineIndex(s);
+  const M = rel(c), a = M.a || 1, d = M.d || 1;
+  const w = lineWidth(c, s, sp, size, li);
   c.save();
-  c.translate(0, p.dy / d);
+  c.translate((p.dx || 0) / a, p.dy / d);
   c.translate(x, y); c.scale(p.f, p.f); c.translate(-x, -y);
-  plain(c, s, x, y, o, lineIndex(s));
+  if (p.extra > 0.5) {
+    // Justify: the extra width goes between words (or between letters for a single word), drawn from the left edge.
+    const x0 = align === "center" ? x - w / 2 : align === "right" ? x - w : x;
+    const extra = p.extra / (p.f * Math.abs(a)), spaces = (s.match(/ /g) || []).length;
+    let sp2 = sp;
+    if (spaces) c.wordSpacing = `${(extra / spaces).toFixed(2)}px`;
+    else sp2 = sp + extra / Math.max(1, [...s].length - 1) / size;
+    plain(c, s, x0, y, { ...o, sp: sp2, align: "left" }, li);
+    c.wordSpacing = "0px";
+  } else plain(c, s, x, y, o, li);
   c.restore();
   return w * p.f;
 }
@@ -218,9 +286,12 @@ function text(c, s, x, y, o = {}) {
   return plain(c, s, x, y, o, li);
 }
 
-function plain(c, s, x, y, { sp = 0, size = 10, fill, stroke, sw = 0, align = "center", base = "middle", deco = false } = {}, li = -1) {
-  // A colour picked for this line (Style tab) replaces the template's colour for it.
-  const col = li >= 0 ? CUR?.T?.lineColor?.[li] : null;
+function plain(c, s, x, y, o = {}, li = -1) {
+  const runs = runsOf(li);
+  if (runs?.length && !o._seg) return plainRuns(c, s, x, y, o, li, runs);
+  let { sp = 0, size = 10, fill, stroke, sw = 0, align = "center", base = "middle", deco = false } = o;
+  // A colour picked for these words, or for this line (Style tab), replaces the template's colour.
+  const col = o._runColor ? fill : li >= 0 ? CUR?.T?.lineColor?.[li] : null;
   if (col && fill && !deco) fill = col;
   c.letterSpacing = `${(sp * size).toFixed(2)}px`;
   c.textAlign = align; c.textBaseline = base; c.lineJoin = "round";
@@ -762,7 +833,7 @@ export function drawTitle(c, T, lt, dur, k) {
   const tpl = titleTemplate(T.tpl)[3];
   let lay = null;
   // Per-line sizes: measure where the template puts each line, then lay them out again.
-  if (!tpl.boxed && T.lineScale?.some((v) => v && v !== 1)) {
+  if (!tpl.boxed && (T.align || T.lineScale?.some((v) => v && v !== 1))) {
     MCTX ??= new OffscreenCanvas(8, 8).getContext("2d");
     MCTX.setTransform(1, 0, 0, 1, 0, 0);
     const rec = {};
@@ -797,7 +868,7 @@ let mctx;
  * finished: { x0, y0, x1, y1 } in 1920-wide pixels. Cached per title content.
  */
 export function titleBox(T) {
-  const key = JSON.stringify([T.tpl, T.lines, T.font, T.look, T.lineScale]);
+  const key = JSON.stringify([T.tpl, T.lines, T.font, T.look, T.lineScale, T.align, T.spans]);
   const hit = boxCache.get(key);
   if (hit) return hit;
   const S = 2400, H = 1600;
