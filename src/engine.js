@@ -351,7 +351,7 @@ export function fxSettingsAt(item, lt) {
   const s = {
     adjust,
     filter: item.filter?.type ? { type: item.filter.type, amount: propAt(item, "filter.amount", lt, 1) } : null,
-    fx: (item.fx || []).map((f) => ({ type: f.type, amount: propAt(item, `fx.${f.id}.amount`, lt, 1), speed: f.speed, p: f.p, hud: f.hud })),
+    fx: (item.fx || []).map((f) => ({ type: f.type, amount: propAt(item, `fx.${f.id}.amount`, lt, 1), speed: f.speed, p: f.p, hud: f.hud, pos: f.pos })),
     chroma: item.chroma,
   };
   return hasFx(s) ? s : null;

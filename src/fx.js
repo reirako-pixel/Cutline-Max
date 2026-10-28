@@ -68,14 +68,14 @@ export const EFFECTS = {
   fisheye: { label: "Fisheye lens", cat: 1, mode: 25 },
   dreamy: { label: "Dreamy glow", cat: 1, mode: 26 },
   focusPull: { label: "Focus pull", cat: 1, mode: 27 },
-  bloom: { label: "Bloom", cat: 2, mode: 30 },
-  lightLeak: { label: "Light leak", cat: 2, mode: 31, tags: "sun light warm" },
+  bloom: { label: "Bloom", cat: 2, mode: 30, place: { size: true } },
+  lightLeak: { label: "Light leak", cat: 2, mode: 31, tags: "sun light warm", place: { x: 0.2, y: 0.2 } },
   flash: { label: "Flash", cat: 2, mode: 32 },
-  godRays: { label: "God rays", cat: 2, mode: 34, tags: "sun rays light beams" },
-  lensFlare: { label: "Lens flare", cat: 2, mode: 35, tags: "sun light" },
+  godRays: { label: "God rays", cat: 2, mode: 34, tags: "sun rays light beams", place: { x: 0.2, y: 0.1 } },
+  lensFlare: { label: "Lens flare", cat: 2, mode: 35, tags: "sun light", place: { x: 0.3, y: 0.25 } },
   neonEdges: { label: "Neon edges", cat: 2, mode: 36 },
-  spotlight: { label: "Spotlight", cat: 2, mode: 37 },
-  darkPulse: { label: "Shadow pulse", cat: 2, mode: 38 },
+  spotlight: { label: "Spotlight", cat: 2, mode: 37, place: { x: 0.5, y: 0.5 }, params: [{ label: "Wander", def: 0 }] },
+  darkPulse: { label: "Shadow pulse", cat: 2, mode: 38, place: { x: 0.5, y: 0.5 } },
   filmGrain: { label: "Film grain", cat: 3, mode: 40, tags: "noise texture grain" },
   oldFilm: { label: "Old film", cat: 3, mode: 41, tags: "vintage retro tv" },
   vhs: { label: "VHS", cat: 3, mode: 42, tags: "vcr tape retro tv" },
@@ -107,9 +107,9 @@ export const EFFECTS = {
   xray: { label: "X-ray", cat: 5, mode: 78 },
   colorPop: { label: "Colour pop (red)", cat: 5, mode: 79 },
   sunRays: { label: "Sun rays", cat: 2, mode: 85, tags: "god rays light leak sunlight beams warm",
-    params: [{ label: "Atmosphere", def: 0.4 }, { label: "Warmth", def: 0.6 }, { label: "Sun position", def: 0.25 }],
-    presets: [{ label: "Morning", amount: 0.6, speed: 0.6, p: [0.3, 0.35, 0.2] }, { label: "Golden hour", amount: 0.85, speed: 0.5, p: [0.5, 0.95, 0.75] },
-      { label: "Hazy", amount: 0.7, speed: 0.4, p: [1, 0.5, 0.5] }, { label: "Heavenly", amount: 1, speed: 1, p: [0.7, 0.1, 0.5] }] },
+    place: { x: 0.25, y: -0.08, yMin: -0.4, yMax: 1.2 }, params: [{ label: "Atmosphere", def: 0.4 }, { label: "Warmth", def: 0.6 }, { label: "Ray detail", def: 0.4 }],
+    presets: [{ label: "Morning", amount: 0.6, speed: 0.6, p: [0.3, 0.35, 0.4], pos: [0.2, -0.08, 1] }, { label: "Golden hour", amount: 0.85, speed: 0.5, p: [0.5, 0.95, 0.4], pos: [0.75, 0.1, 1.2] },
+      { label: "Hazy", amount: 0.7, speed: 0.4, p: [1, 0.5, 0.3], pos: [0.5, -0.1, 1.4] }, { label: "Heavenly", amount: 1, speed: 1, p: [0.7, 0.1, 0.7], pos: [0.5, -0.15, 1] }] },
   staticNoise: { label: "Static noise", cat: 6, mode: 80, tags: "static morph tv snow grain noise chromatic",
     params: [{ label: "Colour split", def: 0.5 }, { label: "Grain size", def: 0.3 }, { label: "Colour", def: 0 }],
     presets: [{ label: "Light static", amount: 0.35, speed: 0.6, p: [0.3, 0.2, 0] }, { label: "Heavy snow", amount: 0.85, speed: 1, p: [0.6, 0.4, 0] },
@@ -135,10 +135,52 @@ export const EFFECTS = {
     params: [{ label: "Trail length", def: 0.5 }, { label: "Direction", def: 0 }, { label: "Only bright parts", def: 0.4 }],
     presets: [{ label: "Light streaks", amount: 0.8, speed: 0.3, p: [0.6, 0, 0.7] }, { label: "Dreamy smear", amount: 0.6, speed: 0.3, p: [0.4, 0.25, 0.1] },
       { label: "Rising trails", amount: 0.9, speed: 0.3, p: [0.7, 0.5, 0.5] }] },
+  dollyZoom: { label: "Dolly zoom", cat: 7, mode: 87, tags: "vertigo zoom camera push dolly",
+    params: [{ label: "Edge stretch", def: 0.7 }],
+    presets: [{ label: "Vertigo", amount: 0.8, speed: 0.6, p: [1] }, { label: "Slow push", amount: 0.5, speed: 0.3, p: [0.3] }] },
+  whipPan: { label: "Whip pan", cat: 7, mode: 88, tags: "whip pan swish swipe fast camera transition",
+    params: [{ label: "Distance", def: 1 }, { label: "Direction", def: 0 }, { label: "Pause between", def: 0.4 }],
+    presets: [{ label: "Swipe left", amount: 0.9, speed: 1, p: [1, 0, 0.4] }, { label: "Swipe up", amount: 0.9, speed: 1, p: [1, 0.25, 0.4] },
+      { label: "Nudge", amount: 0.6, speed: 1, p: [0.15, 0, 0.3] }] },
+  crashZoom: { label: "Crash zoom", cat: 7, mode: 89, tags: "crash zoom punch impact snap camera beat",
+    params: [{ label: "Zoom", def: 0.6 }, { label: "Blur", def: 0.7 }, { label: "Pause between", def: 0.35 }],
+    presets: [{ label: "Punch", amount: 1, speed: 1, p: [0.6, 0.8, 0.3] }, { label: "On the beat", amount: 0.8, speed: 1, p: [0.35, 0.5, 0.1] },
+      { label: "Dramatic", amount: 1, speed: 0.6, p: [1, 1, 0.8] }] },
+  tiltSway: { label: "Tilt sway", cat: 7, mode: 90, tags: "dutch tilt roll sway rock boat camera",
+    params: [{ label: "Tilt", def: 0.6 }, { label: "Bob", def: 0.3 }],
+    presets: [{ label: "Boat", amount: 0.8, speed: 0.7, p: [0.8, 0.6] }, { label: "Dizzy", amount: 1, speed: 1.6, p: [1, 0.4] }, { label: "Gentle", amount: 0.4, speed: 0.6, p: [0.5, 0.2] }] },
+  swing3d: { label: "3D swing", cat: 7, mode: 91, tags: "3d swing perspective rotate card tilt parallax camera",
+    params: [{ label: "Turn left-right", def: 0.7 }, { label: "Turn up-down", def: 0.3 }, { label: "Show edges", def: 0 }],
+    presets: [{ label: "Card turn", amount: 0.8, speed: 1, p: [0.8, 0.2, 0] }, { label: "Floating", amount: 0.5, speed: 0.6, p: [0.5, 0.5, 0] },
+      { label: "Poster", amount: 0.7, speed: 0.7, p: [0.7, 0.3, 1] }] },
+  droneDrift: { label: "Drone drift", cat: 7, mode: 92, tags: "drone drift float glide aerial slow camera",
+    params: [{ label: "Drift", def: 0.6 }, { label: "Turn", def: 0.4 }, { label: "Zoom breathing", def: 0.4 }],
+    presets: [{ label: "Aerial", amount: 0.8, speed: 1, p: [0.7, 0.5, 0.4] }, { label: "Dreamy float", amount: 0.6, speed: 0.6, p: [0.5, 0.2, 0.8] }] },
+  focusBreath: { label: "Focus breathing", cat: 7, mode: 93, tags: "rack focus breathing blur lens defocus camera",
+    params: [{ label: "Blur", def: 0.6 }, { label: "Zoom breathing", def: 0.5 }, { label: "Sharp time", def: 0.5 }],
+    presets: [{ label: "Rack focus", amount: 0.8, speed: 0.6, p: [0.8, 0.4, 0.7] }, { label: "Dreamy", amount: 0.6, speed: 0.4, p: [0.5, 0.8, 0.2] }] },
+  warpSpeed: { label: "Warp speed", cat: 7, mode: 94, tags: "warp speed hyperspace streaks rush zoom fast",
+    params: [{ label: "Streaks", def: 0.5 }, { label: "Zoom blur", def: 0.6 }, { label: "Blue tint", def: 0.5 }],
+    presets: [{ label: "Hyperspace", amount: 1, speed: 1.5, p: [0.7, 0.8, 0.7] }, { label: "Rush", amount: 0.7, speed: 1, p: [0.4, 0.5, 0] }] },
+  bounce: { label: "Bounce", cat: 7, mode: 95, tags: "bounce hop jump camera beat",
+    params: [{ label: "Height", def: 0.6 }, { label: "Bounces per second", def: 0.4 }, { label: "Squash", def: 0.5 }],
+    presets: [{ label: "Happy hop", amount: 0.7, speed: 1, p: [0.5, 0.5, 0.6] }, { label: "Big jump", amount: 1, speed: 0.7, p: [1, 0.2, 0.8] }] },
+  spin: { label: "Spin", cat: 7, mode: 96, tags: "spin rotate turn round camera",
+    params: [{ label: "Spin speed", def: 0.3 }, { label: "Direction", def: 0 }, { label: "Zoom to fill", def: 1 }],
+    presets: [{ label: "Slow turn", amount: 1, speed: 1, p: [0.1, 0, 1] }, { label: "Twister", amount: 1, speed: 1, p: [0.8, 1, 1] }] },
+  echoShake: { label: "Echo shake", cat: 7, mode: 97, tags: "echo shake ghost trail jitter camera handheld",
+    params: [{ label: "Shake", def: 0.6 }, { label: "Echo spacing", def: 0.5 }, { label: "Echo strength", def: 0.6 }],
+    presets: [{ label: "Ghosty", amount: 0.8, speed: 0.8, p: [0.6, 0.8, 0.8] }, { label: "Party", amount: 1, speed: 1.6, p: [0.9, 0.3, 0.6] }] },
 };
 
 /** An effect's extra slider values (0–1), in the order of its `params`. */
 export const fxParams = (f) => (EFFECTS[f.type]?.params || []).map((d, i) => f.p?.[i] ?? d.def);
+
+/** Where a light & shadow effect sits and how big it is: [x 0–1 from the left, y 0–1 from the top, size]. */
+export const fxPlace = (f) => {
+  const d = EFFECTS[f.type]?.place;
+  return d ? [f.pos?.[0] ?? d.x ?? 0.5, f.pos?.[1] ?? d.y ?? 0.5, f.pos?.[2] ?? 1] : [0.5, 0.5, 1];
+};
 
 /** A new effect entry for an item's fx list. */
 export function newFx(type, uid) {
@@ -250,6 +292,11 @@ const EFFECT = COMMON + `
 uniform int mode;
 uniform float amount;
 uniform vec3 P;
+uniform vec3 Q; // where a light sits (x, y with y up) and its size
+vec2 rot2(vec2 d, float a){ return mat2(cos(a), -sin(a), sin(a), cos(a)) * d; }
+vec2 jit(float t){ return vec2(noise(vec2(t * 1.3, 1.7)) + 0.5 * noise(vec2(t * 3.1, 4.2)), noise(vec2(t * 1.1, 7.3)) + 0.5 * noise(vec2(t * 2.9, 9.1))) / 1.5 - 0.5; }
+/** How much a picture turned by angle a must be enlarged to still fill the frame. */
+float coverZoom(float a, float asp){ float ca = abs(cos(a)), sa = abs(sin(a)); return max(ca + sa / asp * 1.0, ca + sa * asp) ; }
 const float PI = 3.14159265;
 vec4 blurAt(vec2 p, float r){
   vec4 acc = vec4(0.0); float w = 0.0;
@@ -349,29 +396,29 @@ void main(){
     float k = 0.5 + 0.5 * sin(time * 1.5);
     c = blurAt(p, 0.03 * A * k);
   } else if (mode == 30) {
-    vec4 b = blurAt(p, 0.025);
+    vec4 b = blurAt(p, 0.025 * Q.z);
     vec3 bright = max(unpm(b) - 0.55, 0.0) * 2.2;
     c = blendScreen(S(p), bright * A);
   } else if (mode == 31) {
     vec2 q = p * vec2(asp, 1.0);
-    float l1 = smoothstep(0.9, 0.0, distance(q, vec2(asp * (0.2 + 0.15 * sin(time * 0.7)), 0.8)));
-    float l2 = smoothstep(0.8, 0.0, distance(q, vec2(asp * (0.9 + 0.1 * sin(time * 0.5 + 2.0)), 0.25)));
+    float l1 = smoothstep(0.9 * Q.z, 0.0, distance(q, vec2(asp * (Q.x + 0.12 * sin(time * 0.7)), Q.y)));
+    float l2 = smoothstep(0.8 * Q.z, 0.0, distance(q, vec2(asp * (1.0 - Q.x * 0.9 + 0.08 * sin(time * 0.5 + 2.0)), 1.05 - Q.y)));
     vec3 light = vec3(1.0, 0.45, 0.15) * l1 + vec3(1.0, 0.75, 0.3) * l2 * 0.7;
     c = blendScreen(S(p), light * A * (0.8 + 0.2 * sin(time * 2.3)));
   } else if (mode == 32) {
     float f = pow(max(0.0, sin(time * 3.0)), 12.0);
     c = S(p); c.rgb = mix(c.rgb, vec3(c.a), f * A);
   } else if (mode == 34) {
-    vec2 src = vec2(0.2 + 0.05 * sin(time * 0.6), 0.9);
+    vec2 src = vec2(Q.x + 0.05 * sin(time * 0.6), Q.y);
     vec4 acc = vec4(0.0);
-    for (int i = 0; i < 24; i++) { float t = float(i) / 24.0; vec4 s = S(mix(p, src, t * 0.6)); acc += vec4(max(unpm(s) - 0.6, 0.0), 0.0) * (1.0 - t); }
+    for (int i = 0; i < 24; i++) { float t = float(i) / 24.0; vec4 s = S(mix(p, src, t * min(0.95, 0.6 * Q.z))); acc += vec4(max(unpm(s) - 0.6, 0.0), 0.0) * (1.0 - t); }
     c = blendScreen(S(p), acc.rgb / 8.0 * A * vec3(1.0, 0.95, 0.8));
   } else if (mode == 35) {
     vec2 q = p * vec2(asp, 1.0);
-    vec2 sun = vec2(asp * (0.25 + 0.5 * fract(time * 0.05)), 0.75);
+    vec2 sun = vec2(asp * (Q.x + 0.04 * sin(time * 0.4)), Q.y + 0.02 * cos(time * 0.5));
     vec2 axis = vec2(asp * 0.5, 0.5) - sun;
-    vec3 light = vec3(1.0, 0.9, 0.7) * smoothstep(0.25, 0.0, distance(q, sun));
-    for (int i = 1; i < 5; i++) { vec2 g = sun + axis * float(i) * 0.5; light += vec3(0.4, 0.6, 1.0) * smoothstep(0.06 * float(i), 0.0, distance(q, g)) * 0.35; }
+    vec3 light = vec3(1.0, 0.9, 0.7) * smoothstep(0.25 * Q.z, 0.0, distance(q, sun));
+    for (int i = 1; i < 5; i++) { vec2 g = sun + axis * float(i) * 0.5; light += vec3(0.4, 0.6, 1.0) * smoothstep(0.06 * float(i) * Q.z, 0.0, distance(q, g)) * 0.35; }
     c = blendScreen(S(p), light * A);
   } else if (mode == 36) {
     float e = smoothstep(0.15, 0.6, edge(p));
@@ -381,13 +428,13 @@ void main(){
     c = pm(rgb, base.a);
   } else if (mode == 37) {
     vec2 q = p * vec2(asp, 1.0);
-    vec2 ctr = vec2(asp * (0.5 + 0.3 * sin(time * 0.6)), 0.5 + 0.2 * cos(time * 0.8));
-    float l = smoothstep(0.55, 0.15, distance(q, ctr));
+    vec2 ctr = vec2(asp * (Q.x + 0.3 * P.x * sin(time * 0.6)), Q.y + 0.2 * P.x * cos(time * 0.8));
+    float l = smoothstep(0.55 * Q.z, 0.15 * Q.z, distance(q, ctr));
     c = S(p); c.rgb *= mix(1.0, 0.15 + 0.95 * l, A);
   } else if (mode == 38) {
-    vec2 d = (p - 0.5) * vec2(asp, 1.0);
+    vec2 d = (p - Q.xy) * vec2(asp, 1.0);
     float k = 0.5 + 0.5 * sin(time * 4.0);
-    c = S(p); c.rgb *= 1.0 - A * k * smoothstep(0.25, 0.9, length(d));
+    c = S(p); c.rgb *= 1.0 - A * k * smoothstep(0.25 * Q.z, 0.9 * Q.z, length(d));
   } else if (mode == 40) {
     c = S(p); vec3 rgb = unpm(c);
     rgb += (rnd(p * res + fract(time * 13.7) * 200.0) - 0.5) * 0.35 * A;
@@ -627,16 +674,16 @@ void main(){
     d = mat2(cos(ang), -sin(ang), sin(ang), cos(ang)) * d;
     c = S(d / vec2(asp, 1.0) / z + 0.5 + j);
   } else if (mode == 85) { // sun rays: shimmering beams from a sun just above the frame, with haze and warmth
-    vec2 src = vec2(mix(0.05, 0.95, P.z) + 0.03 * sin(time * 0.5), 1.08);
+    vec2 src = vec2(Q.x + 0.03 * sin(time * 0.5), Q.y);
     vec2 dir = (p - src) * vec2(asp, 1.0);
     float r = length(dir);
     float ang = atan(dir.x, -dir.y);
-    float rays = noise(vec2(ang * 9.0, time * 0.6)) + 0.6 * noise(vec2(ang * 23.0, time * 1.1 + 5.0));
-    rays = pow(rays / 1.6, 2.2) * smoothstep(1.7, 0.0, r);
+    float rays = noise(vec2(ang * mix(4.0, 16.0, P.z), time * 0.6)) + 0.6 * noise(vec2(ang * mix(10.0, 40.0, P.z), time * 1.1 + 5.0));
+    rays = pow(rays / 1.6, 2.2) * smoothstep(1.7 * Q.z, 0.0, r);
     vec3 acc = vec3(0.0);
     for (int i = 0; i < 16; i++) { float t = float(i) / 16.0; acc += max(unpm(S(mix(p, src, t * 0.5))) - 0.55, 0.0) * (1.0 - t); }
     vec3 warm = mix(vec3(1.0, 0.97, 0.9), vec3(1.0, 0.6, 0.22), P.y);
-    vec3 light = warm * (rays * 1.3 + P.x * 0.45 * smoothstep(1.5, 0.0, r) + smoothstep(0.4, 0.0, r) * 0.8) + acc / 6.0 * warm;
+    vec3 light = warm * (rays * 1.3 + P.x * 0.45 * smoothstep(1.5 * Q.z, 0.0, r) + smoothstep(0.4 * Q.z, 0.0, r) * 0.8) + acc / 6.0 * warm;
     vec4 base = S(p);
     vec4 tinted = pm(mix(unpm(base), unpm(base) * mix(vec3(1.0), vec3(1.08, 1.0, 0.86), P.y), A), base.a);
     c = blendScreen(tinted, light * A);
@@ -649,6 +696,93 @@ void main(){
       trail = max(trail, s * smoothstep(mix(0.0, 0.75, P.z), 1.0, luma(s)) * (1.0 - t * 0.9));
     }
     c = pm(max(unpm(base), trail), base.a);
+  } else if (mode == 87) { // dolly zoom (vertigo): the middle pushes in while the edges stretch away
+    float z = 1.0 + 0.3 * A * (0.5 - 0.5 * cos(time * 1.2));
+    vec2 d = (p - 0.5) * vec2(asp, 1.0);
+    float rmax2 = 0.25 * (asp * asp + 1.0);
+    float k = P.x * (z - 1.0) / rmax2;
+    c = S(d * (1.0 + k * dot(d, d)) / z / vec2(asp, 1.0) + 0.5);
+  } else if (mode == 88) { // whip pan: a fast blurred swish to the side, then the shot settles again
+    float period = mix(0.8, 4.0, P.z);
+    float t = fract(time / period);
+    float sw = smoothstep(0.38, 0.62, t), v = 4.0 * sw * (1.0 - sw);
+    float ang = P.y * 2.0 * PI;
+    vec2 dir = vec2(cos(ang), sin(ang));
+    vec2 base = p + dir * sw * P.x;
+    vec4 acc = vec4(0.0);
+    for (int i = 0; i < 16; i++) { float o = (float(i) / 15.0 - 0.5) * v * 0.35 * A; acc += S(fract(base + dir * o)); }
+    c = acc / 16.0;
+  } else if (mode == 89) { // crash zoom: a sudden punch-in with zoom blur, easing back out
+    float period = mix(0.8, 4.0, P.z);
+    float t = fract(time / period);
+    float e = smoothstep(0.0, 0.1, t) * (1.0 - smoothstep(0.45, 1.0, t));
+    float z = 1.0 + P.x * 0.8 * A * e;
+    float bl = (1.0 - smoothstep(0.0, 0.18, t)) * smoothstep(0.0, 0.02, t) * 0.25 * A * P.y + 0.02 * A * P.y * e;
+    vec4 acc = vec4(0.0);
+    for (int i = 0; i < 14; i++) { float k = 1.0 - bl * float(i) / 13.0; acc += S((p - 0.5) / z * k + 0.5); }
+    c = acc / 14.0;
+  } else if (mode == 90) { // tilt sway: the camera rolls gently side to side (zoomed in to hide the corners)
+    float ang = (sin(time * 1.1) * 0.75 + (noise(vec2(time * 0.7, 3.0)) - 0.5) * 0.5) * 0.14 * A * P.x;
+    float bob = sin(time * 2.2) * 0.012 * A * P.y;
+    vec2 d = rot2((p - 0.5) * vec2(asp, 1.0), ang) / coverZoom(ang, asp) / (1.0 + 0.03 * A * P.y);
+    c = S(d / vec2(asp, 1.0) + 0.5 + vec2(0.0, bob));
+  } else if (mode == 91) { // 3D swing: the picture turns like a card in space
+    float ty = sin(time * 0.8) * 0.5 * A * P.x, tx = sin(time * 0.6 + 1.0) * 0.35 * A * P.y;
+    vec2 d = (p - 0.5) * vec2(asp, 1.0);
+    float D = 2.2;
+    float u = d.x * D / (D * cos(ty) - d.x * sin(ty));
+    float v = d.y * (D + u * sin(ty)) / D;
+    float v2 = v * D / (D * cos(tx) - v * sin(tx));
+    float u2 = u * (D + v2 * sin(tx)) / D;
+    float z = 1.0 + (abs(sin(ty)) + abs(sin(tx))) * mix(0.55, 0.0, P.z);
+    c = S(vec2(u2, v2) / z / vec2(asp, 1.0) + 0.5);
+  } else if (mode == 92) { // drone drift: a slow floating glide with a gentle turn
+    vec2 dr = (vec2(noise(vec2(time * 0.15, 2.0)), noise(vec2(time * 0.13, 8.0))) - 0.5) * 0.12 * A * P.x;
+    float ang = sin(time * 0.2) * 0.04 * A * P.y;
+    float z = coverZoom(ang, asp) * (1.0 + 0.1 * A * P.x + 0.06 * A * P.z * (0.5 + 0.5 * sin(time * 0.25)));
+    vec2 d = rot2((p - 0.5) * vec2(asp, 1.0), ang) / z;
+    c = S(d / vec2(asp, 1.0) + 0.5 + dr);
+  } else if (mode == 93) { // focus breathing: the lens drifts in and out of focus
+    float w = 0.5 + 0.5 * sin(time * 1.2);
+    float z = 1.0 + 0.03 * A * P.y * w;
+    vec2 q = (p - 0.5) / z + 0.5;
+    c = blurAt(q, 0.03 * A * P.x * pow(w, mix(1.0, 3.0, P.z)));
+  } else if (mode == 94) { // warp speed: streaks rushing out from the middle
+    vec2 d = (p - 0.5) * vec2(asp, 1.0);
+    float r = length(d), ang = atan(d.y, d.x);
+    vec4 acc = vec4(0.0);
+    for (int i = 0; i < 16; i++) { float k = 1.0 - 0.18 * A * P.y * float(i) / 15.0; acc += S((p - 0.5) * k + 0.5); }
+    vec4 base = acc / 16.0;
+    float lanes = floor(ang * mix(20.0, 80.0, P.x) / 6.2832);
+    float seed = rnd(vec2(lanes, 3.7));
+    float streak = step(0.55, seed) * smoothstep(0.0, 0.03, fract(r * 1.5 - time * (1.0 + seed * 2.0) + seed) ) * (1.0 - smoothstep(0.03, 0.35, fract(r * 1.5 - time * (1.0 + seed * 2.0) + seed)));
+    streak *= smoothstep(0.05, 0.5, r);
+    vec3 col = mix(vec3(1.0), vec3(0.45, 0.9, 1.0), P.z);
+    c = blendScreen(base, col * streak * A * 1.2);
+  } else if (mode == 95) { // bounce: the camera hops up and down with a little squash on landing
+    float ph = fract(time * mix(0.6, 2.5, P.y));
+    float h = 4.0 * ph * (1.0 - ph);
+    float land = 1.0 - smoothstep(0.0, 0.12, min(ph, 1.0 - ph));
+    vec2 d = (p - 0.5) * vec2(asp, 1.0);
+    d.y /= 1.0 - 0.08 * A * P.z * land;
+    d.x /= 1.0 + 0.05 * A * P.z * land;
+    float z = 1.0 + 0.1 * A * P.x + 0.05 * A * P.z;
+    c = S(d / z / vec2(asp, 1.0) + 0.5 - vec2(0.0, h * 0.08 * A * P.x));
+  } else if (mode == 96) { // spin: the picture turns round and round
+    float ang = time * mix(0.2, 4.0, P.x) * (P.y < 0.5 ? 1.0 : -1.0) * A;
+    float z = mix(1.0, coverZoom(ang, asp), P.z);
+    vec2 d = rot2((p - 0.5) * vec2(asp, 1.0), ang) / z;
+    vec2 q = d / vec2(asp, 1.0) + 0.5;
+    c = (any(lessThan(q, vec2(0.0))) || any(greaterThan(q, vec2(1.0)))) ? vec4(0.0, 0.0, 0.0, 1.0) : S(q);
+  } else if (mode == 97) { // echo shake: a jittery camera leaving fading copies of itself
+    vec4 acc = vec4(0.0); float wsum = 0.0;
+    float z = 1.0 + 0.08 * A * P.x;
+    for (int i = 0; i < 5; i++) {
+      float fi = float(i), w = i == 0 ? 1.0 : P.z * pow(0.7, fi);
+      vec2 j = jit(time * 2.5 - fi * mix(0.02, 0.15, P.y)) * 0.07 * A * P.x;
+      acc += S((p - 0.5) / z + 0.5 + j) * w; wsum += w;
+    }
+    c = acc / wsum;
   } else {
     c = S(p);
   }
@@ -786,6 +920,8 @@ export function applyFx(source, s, time, W, H) {
       gl.uniform1f(P.u("time"), time * (f.speed ?? 1)); // the effect's own speed
       const v = fxParams(f);
       gl.uniform3f(P.u("P"), v[0] ?? 0, v[1] ?? 0, v[2] ?? 0);
+      const q = fxPlace(f);
+      gl.uniform3f(P.u("Q"), q[0], 1 - q[1], q[2]); // y measured from the top in the panel, from the bottom in the shader
     } });
   }
   if (!passes.length) passes.push({ prog: progs.copy, set: () => {} });

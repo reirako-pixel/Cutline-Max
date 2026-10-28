@@ -38,7 +38,7 @@ import { loadSettings, settings as appSettings, setSetting, lastDur, rememberDur
 import {
   EffectsTab, FiltersTab, AudioTab, TextTab, AdjustmentTab, AudioPresetsTab, MediaKitsTab, ElementsTab,
 } from "./ui/library.js";
-import { EFFECT_CATEGORIES } from "./fx.js";
+import { EFFECT_CATEGORIES, EFFECTS, fxPlace } from "./fx.js";
 import { linkWebFonts, loadProjectFonts, loadSystemFonts, loadRecentFonts } from "./ui/fonts.js";
 import { loadTextPresets, addDefaultText } from "./presets.js";
 import {
@@ -264,13 +264,38 @@ function LeftPanel() {
   const [subs, setSubs] = useState({});
   const sub = subs[tab] ?? SUB_NAV[tab][0][0];
   const strip = useRef();
+  // Left / right arrows show only when there are more buttons that way.
+  const [ends, setEnds] = useState([false, false]);
+  const measure = () => {
+    const el = strip.current;
+    if (!el) return;
+    const next = [el.scrollLeft > 2, el.scrollLeft + el.clientWidth < el.scrollWidth - 2];
+    setEnds((cur) => (cur[0] === next[0] && cur[1] === next[1] ? cur : next));
+  };
+  useEffect(() => {
+    const el = strip.current;
+    if (!el) return;
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    // The mouse wheel scrolls the strip sideways.
+    const wheel = (e) => { if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { el.scrollLeft += e.deltaY; e.preventDefault(); } };
+    el.addEventListener("wheel", wheel, { passive: false });
+    return () => { ro.disconnect(); el.removeEventListener("wheel", wheel); };
+  }, []);
+  // The chosen tab is always fully in view.
+  useEffect(() => { strip.current?.querySelector("button.on")?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" }); }, [tab]);
+  const page = (dir) => strip.current?.scrollBy({ left: dir * Math.max(120, strip.current.clientWidth * 0.7), behavior: "smooth" });
   return html`<aside class="panel left">
-    <nav class="libtabs" ref=${strip}>
-      ${LIB_TABS.map(([k, l, icon]) => html`<button key=${k} class=${tab === k ? "on" : ""} onClick=${() => setTab(k)} title=${l}>
-        <${Icon} n=${icon} size=${18} /><span>${l}</span>
-      </button>`)}
-      <button class="libmore" title="More" onClick=${() => strip.current && (strip.current.scrollLeft += 160)}><${Icon} n="chevron-right" /></button>
-    </nav>
+    <div class="libtabs-wrap">
+      ${ends[0] && html`<button class="libmore" title="Earlier buttons" aria-label="Scroll left" onClick=${() => page(-1)}><${Icon} n="chevron-left" /></button>`}
+      <nav class="libtabs" ref=${strip} onScroll=${measure}>
+        ${LIB_TABS.map(([k, l, icon]) => html`<button key=${k} class=${tab === k ? "on" : ""} onClick=${() => setTab(k)} title=${l}>
+          <${Icon} n=${icon} size=${16} /><span>${l}</span>
+        </button>`)}
+      </nav>
+      ${ends[1] && html`<button class="libmore" title="More buttons" aria-label="Scroll right" onClick=${() => page(1)}><${Icon} n="chevron-right" /></button>`}
+    </div>
     <div class="libbody">
       <div class="subnav">
         ${SUB_NAV[tab].map(([k, l]) => html`<button key=${k} class=${sub === k ? "on" : ""} onClick=${() => setSubs({ ...subs, [tab]: k })}>${l}</button>`)}
@@ -776,8 +801,39 @@ function TransformOverlay({ rect }) {
         ${single && html`<div class="rot" title="Rotate (Shift snaps to 15°)" onPointerDown=${(e) => startRotate(e, kind, item)} />`}
       </div>`;
     })}
+    <${LightHandles} rect=${rect} overlay=${ref} time=${time} />
     <${CropBox} rect=${rect} overlay=${ref} />
   </div>`;
+}
+
+/** ✛ handles for the selected item's light & shadow effects (light leak, god rays, lens flare, spotlight…): drag to move the light. */
+function LightHandles({ rect, overlay, time }) {
+  const project = useStore((s) => s.project);
+  const selection = useStore((s) => s.selection);
+  if (selection.length !== 1 || !["main", "overlay", "effect"].includes(selection[0].kind)) return null;
+  const { kind, id } = selection[0];
+  const item = findItem(project, kind, id);
+  if (!item?.fx?.length) return null;
+  const start = kind === "main" ? layoutMain(project).find((x) => x.id === id)?.start ?? 0 : item.start;
+  if (time < start || time >= start + item.dur) return null;
+  const lights = item.fx.filter((f) => EFFECTS[f.type]?.place && !EFFECTS[f.type].place.size);
+  return lights.map((f) => {
+    const [x, y] = fxPlace(f);
+    const move = (e) => {
+      e.stopPropagation();
+      dragGesture(e, (ev) => {
+        const r = overlay.current.getBoundingClientRect();
+        const nx = Math.round(((ev.clientX - r.left) / r.width) * 1000) / 1000, ny = Math.round(((ev.clientY - r.top) / r.height) * 1000) / 1000;
+        editLive((p) => {
+          const it = findItem(p, kind, id), fx = it?.fx?.find((g) => g.id === f.id);
+          if (fx) { fx.pos = fxPlace(fx); fx.pos[0] = Math.max(-0.2, Math.min(1.2, nx)); fx.pos[1] = Math.max(-0.4, Math.min(1.2, ny)); }
+        });
+      });
+    };
+    return html`<div key=${f.id} class="light-handle" title=${`${EFFECTS[f.type].label}: drag to move the light`} onPointerDown=${move}
+      style=${{ left: Math.max(0, Math.min(1, x)) * rect.width, top: Math.max(0, Math.min(1, y)) * rect.height }}>
+      <span>✛</span><small>${EFFECTS[f.type].label}</small></div>`;
+  });
 }
 
 // ---------------- dialogs ----------------

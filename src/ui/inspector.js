@@ -8,7 +8,7 @@ import {
   setTextSound, soundToAll, toggleAllKeyframes, allKeyedHere, matchAudioLength, audioUnder, fitToFrame,
   MOTION_PRESETS, applyMotionPreset,
 } from "../actions.js";
-import { ADJUST, FILTERS, EFFECTS, EFFECT_CATEGORIES, newFx, fxParams } from "../fx.js";
+import { ADJUST, FILTERS, EFFECTS, EFFECT_CATEGORIES, newFx, fxParams, fxPlace } from "../fx.js";
 import { VOICE_EFFECTS } from "../audiofx.js";
 import { cutoutStatus, loadCutout } from "../segment.js";
 import { uid } from "../store.js";
@@ -279,17 +279,29 @@ function FxExtras({ kind, item, f }) {
   const live = liveSet(kind, item.id);
   const upd = (fn, isLive) => live((it) => { const x = (it.fx || []).find((y) => y.id === f.id); if (x) fn(x); }, isLive);
   const vals = fxParams(f);
+  const place = fxPlace(f);
   return html`<div class="fx-extras">
     ${def.presets && html`<div class="fx-presets">${def.presets.map((pr) => html`<button key=${pr.label} class="chip" title="Set this effect's sliders to the preset"
       onClick=${() => edit((p) => {
         const it = findItem(p, kind, item.id); const x = it?.fx?.find((y) => y.id === f.id); if (!x) return;
-        x.amount = pr.amount; x.speed = pr.speed; x.p = [...pr.p];
+        x.amount = pr.amount; x.speed = pr.speed; x.p = [...pr.p]; if (pr.pos) x.pos = [...pr.pos];
         if (it.keyframes) delete it.keyframes[`fx.${f.id}.amount`];
       })}>${pr.label}</button>`)}</div>`}
     <${Slider} label="Speed" value=${f.speed ?? 1} min=${0} max=${4} step=${0.05} format=${(v) => `${v.toFixed(2)}×`}
       onChange=${(v, l) => upd((x) => (x.speed = v), l)} />
     ${(def.params || []).map((d, i) => html`<${Slider} key=${d.label} label=${d.label} value=${vals[i]} min=${0} max=${1} step=${0.01} format=${pct}
       onChange=${(v, l) => upd((x) => { x.p = fxParams(x); x.p[i] = v; }, l)} />`)}
+    ${def.place && html`<div class="fx-place">
+      ${!def.place.size && html`
+        <${Slider} label="Position left–right" value=${place[0]} min=${-0.2} max=${1.2} step=${0.005} format=${pct}
+          onChange=${(v, l) => upd((x) => { x.pos = fxPlace(x); x.pos[0] = v; }, l)} />
+        <${Slider} label="Position up–down" value=${place[1]} min=${def.place.yMin ?? -0.2} max=${def.place.yMax ?? 1.2} step=${0.005} format=${pct}
+          onChange=${(v, l) => upd((x) => { x.pos = fxPlace(x); x.pos[1] = v; }, l)} />`}
+      <${Slider} label=${def.place.size ? "Glow size" : "Size"} value=${place[2]} min=${0.2} max=${3} step=${0.01} format=${pct}
+        onChange=${(v, l) => upd((x) => { x.pos = fxPlace(x); x.pos[2] = v; }, l)} />
+      ${!def.place.size && html`<p class="muted small">Tip: with this effect selected, drag the ✛ handle in the player to move the light.</p>`}
+      ${f.pos && html`<button class="mini" onClick=${() => upd((x) => { delete x.pos; })}>Reset position & size</button>`}
+    </div>`}
     ${def.hud && html`<label class="check"><input type="checkbox" checked=${f.hud !== false}
       onChange=${(e) => upd((x) => (x.hud = e.target.checked))} /> Show PLAY, battery, tape counter and date</label>`}
   </div>`;
