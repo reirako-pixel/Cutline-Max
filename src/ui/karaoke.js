@@ -33,7 +33,7 @@ export function PairChip({ name, sung, unsung, outline, on, onClick }) {
 
 // ---------- normal text presets ----------
 
-const K = (sung, unsung, extra = {}) => ({ karaoke: { on: true, sung, unsung, ...extra } });
+const K = (sung, unsung, extra = {}) => ({ karaoke: { on: true, sung, unsung, mode: "word", ...extra } });
 const OUTLINE = (c, w) => ({ stroke: c, strokeWidth: w });
 const SHADOW = { shadow: { color: "#000000aa", blur: 10, x: 0, y: 4 } };
 /** [group, [[name, style patch]]]. A patch replaces only the style keys it names; `karaoke` merges with the text's own. */
@@ -53,7 +53,7 @@ export const TEXT_STYLE_PRESETS = [
     ["Karaoke classic", { color: "#4da3ff", ...OUTLINE("#ffffff", 4), ...SHADOW, glow: { on: false }, bg: "", ...K("#ffffff", "#4da3ff", { sungOutline: "#001a4d" }) }],
     ["Karaoke neon", { color: "#ffffff", strokeWidth: 0, shadow: undefined, glow: { on: false }, bg: "", ...K("#39ff14", "#d9ffd0", { glow: true }) }],
     ["Karaoke grey", { color: "#9aa0a6", ...OUTLINE("#000000", 5), ...SHADOW, glow: { on: false }, bg: "", ...K("#ffffff", "#9aa0a6") }],
-    ["Karaoke words", { color: "#ffffff", ...OUTLINE("#000000", 5), ...SHADOW, glow: { on: false }, bg: "", ...K("#ffe14d", "#ffffff", { mode: "word" }) }],
+    ["Karaoke sweep", { color: "#ffffff", ...OUTLINE("#000000", 5), ...SHADOW, glow: { on: false }, bg: "", ...K("#ffe14d", "#ffffff", { mode: "sweep" }) }],
     ["Karaoke box", { color: "#ffffff", strokeWidth: 0, shadow: undefined, glow: { on: false }, bg: "#000000aa", bgPad: 0.5, bgRadius: 0.3, ...K("#ff3cac", "#ffffff") }],
   ]],
   ["Outlines & glows", [
@@ -102,7 +102,7 @@ export function TextGlowSection({ st, setSt }) {
 /** Karaoke for a normal text: the words change from the unsung to the sung colour as they're sung, with 1–4 lines on screen. */
 export function KaraokeSection({ t, st, setSt }) {
   const k = st.karaoke || {};
-  const put = (patch, live) => setSt("karaoke", { sung: "#3df2ff", unsung: st.color || "#ffffff", mode: "sweep", lines: 2, ...k, ...patch }, live);
+  const put = (patch, live) => setSt("karaoke", { sung: "#3df2ff", unsung: st.color || "#ffffff", mode: "word", lines: 4, ...k, ...patch }, live);
   const timed = !!t.words?.length;
   return html`<${Section} title="Karaoke (unsung → sung)" open=${!!k.on}>
     <label class="check"><input type="checkbox" checked=${!!k.on} onChange=${(e) => put({ on: e.target.checked })} /> Karaoke highlight</label>
@@ -119,8 +119,8 @@ export function KaraokeSection({ t, st, setSt }) {
       <${SwatchPicker} label="Not sung yet" value=${k.unsung || "#ffffff"} colors=${UNSUNG_SWATCHES} onPick=${(c) => put({ unsung: c })} />
       <div class="grid2">
         <${Field} label="Highlight">
-          <select value=${k.mode || "sweep"} onChange=${(e) => put({ mode: e.target.value })}>
-            <option value="sweep">Smooth sweep</option><option value="word">Word by word</option>
+          <select value=${k.mode || "word"} onChange=${(e) => put({ mode: e.target.value })}>
+            <option value="word">Word by word</option><option value="sweep">Smooth sweep</option>
           </select>
         <//>
         <${Field} label="Lines move">
@@ -151,7 +151,7 @@ export const setStyleOf = (ids) => (patch) => edit((p) => {
     if (!ids.has(x.id)) continue;
     const { karaoke, ...rest } = structuredClone(patch);
     for (const [key, v] of Object.entries(rest)) { if (v === undefined) delete x.style[key]; else x.style[key] = v; }
-    if (karaoke) x.style.karaoke = { mode: "sweep", lines: 2, ...(x.style.karaoke || {}), ...karaoke };
+    if (karaoke) x.style.karaoke = { mode: "word", lines: 4, ...(x.style.karaoke || {}), ...karaoke };
   }
 });
 
@@ -160,7 +160,7 @@ export const setStyleOf = (ids) => (patch) => edit((p) => {
  * Each line keeps its timing: word timing if it has it, otherwise its words spread over its own time.
  */
 export function joinIntoKaraoke(ids) {
-  const list = getState().project.texts.filter((x) => ids.has(x.id) && !x.title && !x.viz && !x.shape).sort((a, b) => a.start - b.start);
+  const list = getState().project.texts.filter((x) => ids.has(x.id) && !x.title && !x.viz && !x.shape && !x.frame).sort((a, b) => a.start - b.start);
   if (list.length < 2) return toast("Select two or more text lines first");
   const words = list.flatMap((x, i) => {
     let ws = x.words?.length ? x.words.map((w) => ({ ...w }))
@@ -181,7 +181,7 @@ export function joinIntoKaraoke(ids) {
     const joined = { ...structuredClone(findItem(p, "text", first.id)), id, start: first.start, dur: end - first.start, words, text: words.map((w) => w.w).join("") };
     delete joined.spans; delete joined.keyframes;
     joined.style.karaoke = { sung: first.style.highlight && first.style.highlight !== first.style.color ? first.style.highlight : "#3df2ff",
-      unsung: first.style.color || "#ffffff", mode: "sweep", ...(first.style.karaoke || {}), on: true, lines: Math.min(first.style.karaoke?.lines || 2, 4) || 2 };
+      unsung: first.style.color || "#ffffff", mode: "word", ...(first.style.karaoke || {}), on: true, lines: Math.min(first.style.karaoke?.lines || 4, 4) || 4 };
     p.texts = p.texts.filter((x) => !ids.has(x.id)).concat(joined);
   });
   setState({ selection: [{ kind: "text", id }] });

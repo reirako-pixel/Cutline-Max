@@ -28,6 +28,8 @@ import { ShapeFields, shapeName } from "./shapes.js";
 import { VizFields, BeatSyncSection } from "./visualizer.js";
 import { TitleFields, TitleStyleFields } from "./titles.js";
 import { RichText } from "./richtext.js";
+import { FrameFields } from "./frames.js";
+import { frameName } from "../frames.js";
 import { TextStylePresets, KaraokeSection, TextGlowSection, setStyleOf, joinIntoKaraoke } from "./karaoke.js";
 import { titleName } from "../titles.js";
 import { vizStyleName } from "../vizdraw.js";
@@ -678,6 +680,16 @@ const selectAllCaptions = () => {
   toast(`Selected ${ids.length} caption${ids.length === 1 ? "" : "s"}`);
 };
 
+function FrameInspector({ t }) {
+  const [tab, setTab] = useState("frame");
+  return html`<${Shell} tabs=${[["frame", "Frame"], ["animate", "Animation"]]} tab=${tab} setTab=${setTab} note=${frameName(t.frame.type)}>
+    ${tab === "frame" && html`<${FrameFields} t=${t} /><${TransformSection} kind="text" id=${t.id} />`}
+    ${tab === "animate" && html`<${AnimateSection} kind="text" item=${t} />`}
+    <${MatchAudioButton} kind="text" item=${t} />
+    <button class="danger wide" onClick=${deleteSelection}><${Icon} n="trash-2" /> Delete</button>
+  <//>`;
+}
+
 function ShapeInspector({ t }) {
   const [tab, setTab] = useState("shape");
   return html`<${Shell} tabs=${[["shape", shapeName(t.shape.type)], ["animate", "Animation"]]} tab=${tab} setTab=${setTab}>
@@ -761,6 +773,7 @@ function TextInspector({ t }) {
   if (t.title) return html`<${TitleInspector} t=${t} />`;
   if (t.viz) return html`<${VizInspector} t=${t} />`;
   if (t.shape) return html`<${ShapeInspector} t=${t} />`;
+  if (t.frame) return html`<${FrameInspector} t=${t} />`;
   return html`<${TextInspectorBody} t=${t} />`;
 }
 
