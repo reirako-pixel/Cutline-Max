@@ -1022,7 +1022,7 @@ export function karaokeProgress(item, full, t) {
       s[j] = a + c * step; e[j] = a + (c + 1) * step; w0[j] = wordStart; c++;
     }
   }
-  const word = (k.mode || "word") === "word"; // word by word unless set to a smooth sweep
+  const word = true; // normal texts always highlight word by word (older texts may still say "sweep"; Titles sweep letter by letter)
   return (i) => (i < 0 || i >= n ? 0 : word ? (t >= w0[i] ? 1 : 0) : Math.min(1, Math.max(0, (t - s[i]) / Math.max(1e-3, e[i] - s[i]))));
 }
 

@@ -53,7 +53,7 @@ export const TEXT_STYLE_PRESETS = [
     ["Karaoke classic", { color: "#4da3ff", ...OUTLINE("#ffffff", 4), ...SHADOW, glow: { on: false }, bg: "", ...K("#ffffff", "#4da3ff", { sungOutline: "#001a4d" }) }],
     ["Karaoke neon", { color: "#ffffff", strokeWidth: 0, shadow: undefined, glow: { on: false }, bg: "", ...K("#39ff14", "#d9ffd0", { glow: true }) }],
     ["Karaoke grey", { color: "#9aa0a6", ...OUTLINE("#000000", 5), ...SHADOW, glow: { on: false }, bg: "", ...K("#ffffff", "#9aa0a6") }],
-    ["Karaoke sweep", { color: "#ffffff", ...OUTLINE("#000000", 5), ...SHADOW, glow: { on: false }, bg: "", ...K("#ffe14d", "#ffffff", { mode: "sweep" }) }],
+    ["Karaoke yellow", { color: "#ffffff", ...OUTLINE("#000000", 5), ...SHADOW, glow: { on: false }, bg: "", ...K("#ffe14d", "#ffffff") }],
     ["Karaoke box", { color: "#ffffff", strokeWidth: 0, shadow: undefined, glow: { on: false }, bg: "#000000aa", bgPad: 0.5, bgRadius: 0.3, ...K("#ff3cac", "#ffffff") }],
   ]],
   ["Outlines & glows", [
@@ -107,7 +107,7 @@ export function KaraokeSection({ t, st, setSt }) {
   return html`<${Section} title="Karaoke (unsung → sung)" open=${!!k.on}>
     <label class="check"><input type="checkbox" checked=${!!k.on} onChange=${(e) => put({ on: e.target.checked })} /> Karaoke highlight</label>
     ${k.on && html`
-      <p class="muted small">Words change from the “not sung yet” colour to the sung colour as they're sung. ${timed
+      <p class="muted small">Word by word: each whole word changes from the “not sung yet” colour to the sung colour as it's sung (Titles sweep letter by letter instead). ${timed
         ? "This text has word timing from auto lyrics or captions, so the highlight follows the singing."
         : "The words are spread evenly over the text's time on the timeline: put each lyric line on its own line (Enter) and trim the text to the verse."}</p>
       <div class="pair-grid">
@@ -117,18 +117,11 @@ export function KaraokeSection({ t, st, setSt }) {
       </div>
       <${SwatchPicker} label="Sung" value=${k.sung || "#3df2ff"} colors=${SUNG_SWATCHES} onPick=${(c) => put({ sung: c })} />
       <${SwatchPicker} label="Not sung yet" value=${k.unsung || "#ffffff"} colors=${UNSUNG_SWATCHES} onPick=${(c) => put({ unsung: c })} />
-      <div class="grid2">
-        <${Field} label="Highlight">
-          <select value=${k.mode || "word"} onChange=${(e) => put({ mode: e.target.value })}>
-            <option value="word">Word by word</option><option value="sweep">Smooth sweep</option>
-          </select>
-        <//>
-        <${Field} label="Lines move">
-          <select value=${k.scroll ? "line" : "page"} onChange=${(e) => put({ scroll: e.target.value === "line" })}>
-            <option value="page">Page by page</option><option value="line">One line at a time</option>
-          </select>
-        <//>
-      </div>
+      <${Field} label="Lines move">
+        <select value=${k.scroll ? "line" : "page"} onChange=${(e) => put({ scroll: e.target.value === "line" })}>
+          <option value="page">Page by page</option><option value="line">One line at a time</option>
+        </select>
+      <//>
       <div class="kara-lines" role="group" aria-label="Lines on screen">
         <span>Lines on screen</span>
         ${[[0, "All"], [1, "1"], [2, "2"], [3, "3"], [4, "4"]].map(([n, label]) => html`<button key=${label} class=${"chip" + ((k.lines || 0) === n ? " on" : "")}
