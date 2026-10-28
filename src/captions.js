@@ -78,13 +78,16 @@ export function wordsToLyrics(chunks, { karaoke = true, block = 1, forId } = {})
   const style = {
     ...defaultTextStyle(), size: 70, weight: 800, color: "#ffffff", stroke: "#000000", strokeWidth: 5,
     shadow: { color: "#000000aa", blur: 10, x: 0, y: 4 }, highlight: "#ffffff",
-    ...(karaoke ? { karaoke: { on: true, sung: "#3df2ff", unsung: "#ffffff", mode: "sweep", lines: Math.max(1, block) } } : {}),
+    ...(karaoke ? { karaoke: { on: true, sung: "#3df2ff", unsung: "#ffffff", mode: "word", lines: Math.max(1, block) } } : {}),
   };
   return groups.map((grp, i) => {
     const g = grp.flatMap((line, li) => line.map((w, j) => (j ? { ...w } : { ...w, w: (li ? "\n" : "") + w.w.trimStart() })));
-    const start = g[0].t0;
-    // Each block stays up until the next one starts (or a moment after its last word).
-    const next = groups[i + 1]?.[0]?.[0]?.t0;
+    // Karaoke blocks appear a moment before the singing, so all their lines can be read first.
+    const prevEnd = i ? groups[i - 1].at(-1).at(-1).t1 + 0.2 : 0;
+    const start = karaoke && block > 1 ? Math.max(prevEnd, g[0].t0 - 1.2, 0) : g[0].t0;
+    // Each block stays up until the next one appears (or a moment after its last word).
+    const nextGroup = groups[i + 1];
+    const next = nextGroup && (karaoke && block > 1 ? Math.max(g[g.length - 1].t1 + 0.2, nextGroup[0][0].t0 - 1.2) : nextGroup[0][0].t0);
     const end = Math.max(g[g.length - 1].t1 + 0.4, start + 0.6);
     return {
       id: uid(), caption: true, lyricsFor: forId, start, dur: (next != null ? Math.min(end, next) : end) - start,

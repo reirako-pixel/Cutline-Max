@@ -1,6 +1,7 @@
 // Rendering engine: decides what is visible at time t and draws it.
 // Clips use Canvas 2D; transitions blend two clip frames in a WebGL shader; colour, filters and
 // effects run in fx.js. Layer order, bottom to top: main track → overlay tracks → timeline effects → texts.
+import { frameImage } from "./frames.js";
 import { layoutMain, getState } from "./store.js";
 import { proxySrc } from "./proxy.js";
 import { valueAt, propAt } from "./keyframes.js";
@@ -765,6 +766,10 @@ export function itemBounds(project, kind, item, W, H, t) {
     return { cx: tr.x + (ox * Math.cos(r) - oy * Math.sin(r)) / W, cy: tr.y + (ox * Math.sin(r) + oy * Math.cos(r)) / H,
       w: ((b.x1 - b.x0) * k) / W, h: ((b.y1 - b.y0) * k) / H, rotation: tr.rotation };
   }
+  if (item.frame) {
+    const tr = t == null ? { x: item.x, y: item.y, scale: item.scale || 1, rotation: item.rotation || 0 } : transformAt(item, lt, true);
+    return { cx: tr.x, cy: tr.y, w: tr.scale, h: tr.scale, rotation: tr.rotation };
+  }
   if (item.viz) {
     const tr = t == null ? { x: item.x, y: item.y, scale: item.scale || 1, rotation: item.rotation || 0 } : transformAt(item, lt, true);
     return { cx: tr.x, cy: tr.y, w: (item.viz.w * (W / 1920) * tr.scale) / W, h: (item.viz.h * (W / 1920) * tr.scale) / H, rotation: tr.rotation };
@@ -817,6 +822,16 @@ export function drawText(ctx, item, t, W, H) {
   if (tr.opacity <= 0) return;
   if (item.viz) { drawViz(ctx, item, a, tr, W, H); return; }
   if (item.title) { drawTitleLayer(ctx, item, lt, a, tr, W, H); return; }
+  if (item.frame) { // decorative border over the whole picture (moves / zooms with the layer's transform)
+    ctx.save();
+    ctx.globalAlpha = a.alpha * tr.opacity;
+    ctx.translate(tr.x * W + a.dx * W, tr.y * H + a.dy * H);
+    ctx.rotate((tr.rotation * Math.PI) / 180);
+    ctx.scale(a.scale * tr.scale, a.scale * tr.scale);
+    ctx.drawImage(frameImage(item.frame, W, H, lt * (item.frame.speed ?? 1)), -W / 2, -H / 2, W, H);
+    ctx.restore();
+    return;
+  }
   const size = st.size * (W / 1920);
   ctx.save();
   ctx.globalAlpha = a.alpha * tr.opacity;
@@ -1007,7 +1022,7 @@ export function karaokeProgress(item, full, t) {
       s[j] = a + c * step; e[j] = a + (c + 1) * step; w0[j] = wordStart; c++;
     }
   }
-  const word = k.mode === "word";
+  const word = (k.mode || "word") === "word"; // word by word unless set to a smooth sweep
   return (i) => (i < 0 || i >= n ? 0 : word ? (t >= w0[i] ? 1 : 0) : Math.min(1, Math.max(0, (t - s[i]) / Math.max(1e-3, e[i] - s[i]))));
 }
 
@@ -1104,7 +1119,9 @@ export function drawFrame(ctx, project, t, opts = {}) {
     ctx.restore();
   }
   // Texts on higher text tracks draw on top (like the timeline rows).
-  if (!hidden("text")) for (const item of [...project.texts].sort((a, b) => (a.track ?? 0) - (b.track ?? 0))) drawText(ctx, item, t, W, H);
+  // Frames (borders) sit under the texts and titles, so words stay readable over them.
+  const order = (x) => (x.frame ? -1000 : 0) + (x.track ?? 0);
+  if (!hidden("text")) for (const item of [...project.texts].sort((a, b) => order(a) - order(b))) drawText(ctx, item, t, W, H);
 }
 
 /** Items of a lane (overlays, audio, effects) visible at t, with local and source time. */

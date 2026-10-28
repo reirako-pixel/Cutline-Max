@@ -25,6 +25,8 @@ import { Home } from "./ui/home.js";
 import { Timeline, dragGesture, setToggle } from "./ui/timeline.js";
 import { MaskHandles, CropBox } from "./ui/mask.js";
 import { ShapesTab } from "./ui/shapes.js";
+import { FramesTab } from "./ui/frames.js";
+import { frameName } from "./frames.js";
 import { VisualizerTab } from "./ui/visualizer.js";
 import { TitlesTab } from "./ui/titles.js";
 import { TITLE_CATEGORIES, titleName } from "./titles.js";
@@ -229,6 +231,7 @@ const LIB_TABS = [
   ["media", "Media", "film"],
   ["elements", "Elements", "shapes"],
   ["shapes", "Shapes", "triangle"],
+  ["frames", "Frames", "frame"],
   ["audio", "Audio", "music"],
   ["visualizer", "Visualizer", "audio-waveform"],
   ["text", "Text", "type"],
@@ -244,6 +247,7 @@ const SUB_NAV = {
   media: [["library", "Library"], ["kits", "My kits"]],
   elements: [["mine", "My elements"]],
   shapes: [["basic", "Shapes"], ["arrows", "Arrows"]],
+  frames: [["all", "All frames"], ["paper", "Paper"], ["elegant", "Elegant"], ["fun", "Fun & film"]],
   audio: [["music", "Music & sounds"], ["tts", "Text to speech"], ["mine", "My presets"]],
   text: [["mine", "My presets"], ["add", "Add text"], ["presets", "Text presets"], ["captions", "Auto captions"]],
   effects: EFFECT_CATEGORIES.map((c, i) => [String(i), c]),
@@ -275,6 +279,7 @@ function LeftPanel() {
         ${tab === "media" && (sub === "kits" ? html`<${MediaKitsTab} />` : html`<${MediaTab} />`)}
         ${tab === "elements" && html`<${ElementsTab} />`}
         ${tab === "shapes" && html`<${ShapesTab} part=${sub} />`}
+        ${tab === "frames" && html`<${FramesTab} part=${sub} />`}
         ${tab === "visualizer" && html`<${VisualizerTab} part=${sub} />`}
         ${tab === "titles" && html`<${TitlesTab} part=${sub} />`}
         ${tab === "audio" && (sub === "mine" ? html`<${AudioPresetsTab} />` : html`<${AudioTab} part=${sub} />`)}
@@ -560,6 +565,12 @@ function nudgeSelection(dxPx, dyPx) {
   return true;
 }
 
+/** A frame (border) is only picked by clicking near its edges, so clicks in the middle still reach the video and texts under it. */
+function onFrameEdge(v, b, pt) {
+  if (!v.item.frame || !b) return true;
+  return Math.abs(pt.x - b.cx) / b.w > 0.4 || Math.abs(pt.y - b.cy) / b.h > 0.38;
+}
+
 /** A short name for something on the timeline, for the player's Select menu. */
 function itemLabel(project, kind, it) {
   const media = project.media[it.mediaId]?.name || "";
@@ -567,6 +578,7 @@ function itemLabel(project, kind, it) {
     if (it.title) return ["heading", `Title: ${it.title.lines?.find((l) => l.trim()) || titleName(it.title.tpl)}`];
     if (it.viz) return ["audio-waveform", `Visualizer: ${it.vizName || vizStyleName(it.viz.style)}`];
     if (it.shape) return ["shapes", "Shape"];
+    if (it.frame) return ["frame", `Frame: ${frameName(it.frame.type)}`];
     return ["type", `${it.caption ? "Caption" : "Text"}: ${it.text.replace(/\s+/g, " ").slice(0, 30)}`];
   }
   if (kind === "overlay") return ["layers", `Layer: ${media}`];
@@ -600,7 +612,7 @@ function TransformOverlay({ rect }) {
     if (e.button !== 0) return;
     if (getState().playing) pause();
     const pt = toFrac(e);
-    const hits = visible.filter((v) => hitTest(bounds(v.kind, v.item), pt.x, pt.y, W, H));
+    const hits = visible.filter((v) => hitTest(bounds(v.kind, v.item), pt.x, pt.y, W, H) && onFrameEdge(v, bounds(v.kind, v.item), pt));
     let hit = hits[0];
     // Alt+click: the next thing down under the pointer (a photo under a visualizer, a layer under a title…).
     if (e.altKey && hits.length > 1) {
@@ -720,7 +732,7 @@ function TransformOverlay({ rect }) {
     e.preventDefault();
     if (getState().playing) pause();
     const project = getState().project, pt = toFrac(e);
-    const found = visible.filter((v) => hitTest(bounds(v.kind, v.item), pt.x, pt.y, W, H)).map((v) => ({ kind: v.kind, item: v.item }));
+    const found = visible.filter((v) => hitTest(bounds(v.kind, v.item), pt.x, pt.y, W, H) && onFrameEdge(v, bounds(v.kind, v.item), pt)).map((v) => ({ kind: v.kind, item: v.item }));
     for (const fx of activeTimed(project.effects, time)) found.push({ kind: "effect", item: fx.item });
     const segs = layoutMain(project);
     segs.forEach((sg, i) => {
@@ -759,7 +771,7 @@ function TransformOverlay({ rect }) {
           onPointerDown=${(e) => startScale(e, kind, item)} />`)}
         ${single && (item.shape || item.viz) && ["n", "s", "e", "w"].map((c) => html`<div key=${c} class=${"knob " + c} title=${`Drag to stretch the ${c === "n" || c === "s" ? "height" : "width"}`}
           onPointerDown=${(e) => startStretch(e, item, c)} />`)}
-        ${single && kind === "text" && !item.shape && !item.viz && ["w", "e"].map((c) => html`<div key=${c} class=${"knob " + c} title="Drag to make the text box wider or narrower (wider = fewer lines)"
+        ${single && kind === "text" && !item.shape && !item.viz && !item.frame && ["w", "e"].map((c) => html`<div key=${c} class=${"knob " + c} title="Drag to make the text box wider or narrower (wider = fewer lines)"
           onPointerDown=${(e) => startBoxWidth(e, item)} />`)}
         ${single && html`<div class="rot" title="Rotate (Shift snaps to 15°)" onPointerDown=${(e) => startRotate(e, kind, item)} />`}
       </div>`;
