@@ -1,7 +1,9 @@
 // Lyrics & karaoke looks for normal texts (Text › Style), and the sung / unsung colour choices shared with Titles.
-import { edit, findItem, getState, setState, uid } from "../store.js";
+import { useState } from "react";
+import { edit, findItem, getState, setState, uid, useStore } from "../store.js";
 import { html, Field, Section, Slider, Icon } from "./kit.js";
-import { toast } from "../actions.js";
+import { toast, audioUnder, pause } from "../actions.js";
+import { transcribeRange, alignWords, lyricsModel, LYRICS_LANGUAGES } from "../captions.js";
 
 /** Sung / not-yet-sung colour pairs: [name, sung, unsung, outline]. */
 export const KARAOKE_PAIRS = [
@@ -117,6 +119,7 @@ export function KaraokeSection({ t, st, setSt }) {
       </div>
       <${SwatchPicker} label="Sung" value=${k.sung || "#3df2ff"} colors=${SUNG_SWATCHES} onPick=${(c) => put({ sung: c })} />
       <${SwatchPicker} label="Not sung yet" value=${k.unsung || "#ffffff"} colors=${UNSUNG_SWATCHES} onPick=${(c) => put({ unsung: c })} />
+      <${TimeToAudio} t=${t} />
       <${Field} label="Lines move">
         <select value=${k.scroll ? "line" : "page"} onChange=${(e) => put({ scroll: e.target.value === "line" })}>
           <option value="page">Page by page</option><option value="line">One line at a time</option>
@@ -179,4 +182,67 @@ export function joinIntoKaraoke(ids) {
   });
   setState({ selection: [{ kind: "text", id }] });
   toast(`Joined ${list.length} lines into one karaoke text. Choose 1–4 “Lines on screen” in Style.`);
+}
+
+/**
+ * "Time words to the singing": listens to the song under the text (only the part the text covers) and
+ * lines up the text's own words with when they're sung, so each word lights up on time.
+ */
+function TimeToAudio({ t }) {
+  const remembered = (k, d) => { try { return localStorage.getItem(k) || d; } catch { return d; } };
+  const [language, setLanguage] = useState(() => remembered("cutline.lyricsLang", "english"));
+  const [quality, setQuality] = useState(() => remembered("cutline.lyricsQuality", "better"));
+  const [status, setStatus] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const song = useStore((s) => audioUnder(s.project, "text", findItem(s.project, "text", t.id)));
+  const songName = useStore((s) => (song ? s.project.media[song.mediaId]?.name : null));
+  const keep = (k, v, set) => { set(v); try { localStorage.setItem(k, v); } catch { /* ignore */ } };
+  const timed = !!t.words?.length;
+  const words = (t.text.match(/\S+/g) || []).length;
+  const perWord = !timed && words ? (t.dur - (t.style.karaoke?.lead || 0) - (t.style.karaoke?.tail ?? 0.3)) / words : 0;
+  const run = async () => {
+    if (getState().playing) pause();
+    const project = getState().project, item = findItem(project, "text", t.id);
+    const a = audioUnder(project, "text", item);
+    if (!a) return setStatus("There's no music under this text. Put the text over the song on the timeline first.");
+    setBusy(true);
+    setStatus("Getting the song ready…");
+    try {
+      const chunks = await transcribeRange(project, a, item.start, item.start + item.dur, { model: lyricsModel(language, quality), language }, (p) => setStatus(
+        p.stage === "audio" ? "Getting the song ready…"
+          : p.stage === "download" ? `Downloading the speech model (first time only)… ${Math.round(p.progress || 0)}%`
+          : "Listening to the singing…"));
+      const res = alignWords(item.text, chunks, item.start, item.start + item.dur);
+      if (!res || !res.heard) { setStatus("No singing was heard under this text. Check the language, or try Better accuracy."); setBusy(false); return; }
+      edit((p) => { const x = findItem(p, "text", t.id); if (x) { x.words = res.words; delete x.spans; } });
+      setStatus(res.found === res.total ? `Done: all ${res.total} words were found in the singing. Play it to check.`
+        : `Done: ${res.found} of ${res.total} words were found in the singing; the others are placed between them. Play it to check.`);
+    } catch (err) {
+      setStatus("Couldn't time the words: " + err.message);
+    }
+    setBusy(false);
+  };
+  return html`<div class="kara-time">
+    ${perWord > 2.5 && html`<p class="warn small">Each word lasts about ${perWord.toFixed(1)} s now (the words are spread over the text's whole time), so the highlight will look stuck. Time the words to the singing below, or trim the text to the verse.</p>`}
+    <div class="grid2">
+      <${Field} label="Language">
+        <select value=${language} disabled=${busy} onChange=${(e) => keep("cutline.lyricsLang", e.target.value, setLanguage)}>
+          ${Object.entries(LYRICS_LANGUAGES).map(([k, v]) => html`<option key=${k} value=${k}>${v}</option>`)}
+        </select>
+      <//>
+      <${Field} label="Accuracy">
+        <select value=${quality} disabled=${busy} onChange=${(e) => keep("cutline.lyricsQuality", e.target.value, setQuality)}>
+          <option value="better">Better (slower)</option><option value="fast">Fast</option>
+        </select>
+      <//>
+    </div>
+    <button class="primary wide" disabled=${busy || !song} onClick=${run}
+      title=${song ? `Listens to “${songName}” where this text is, and times each word to the singing` : "Put this text over a song on the timeline first"}>
+      <${Icon} n="audio-lines" /> ${busy ? "Listening…" : timed ? "Time the words again" : "Time words to the singing"}</button>
+    ${!song && html`<p class="muted small">Put this text over a song (an audio clip) on the timeline, then press the button.</p>`}
+    ${status && html`<p class="status">${busy && html`<span class="spin" /> `}${status}</p>`}
+    ${timed && !busy && html`<button class="mini" onClick=${() => edit((p) => { const x = findItem(p, "text", t.id); if (x) delete x.words; })}
+      title="Forget the timing and spread the words evenly again">Clear word timing</button>`}
+    <p class="muted small">Uses the same speech model as Auto lyrics (it runs on your computer and downloads once). If you move the text on the timeline afterwards, press the button again.</p>
+  </div>`;
 }

@@ -48,6 +48,78 @@ export async function transcribeClip(project, item, { model, language }, onProgr
   return chunks.map((c) => ({ ...c, timestamp: c.timestamp?.map((t) => (t == null ? t : t + item.start)) }));
 }
 
+/**
+ * Listens to just part of one audio clip (from s0 to s1 on the timeline), so timing one verse doesn't
+ * mean transcribing the whole song. Returns words timed on the timeline.
+ */
+export async function transcribeRange(project, item, s0, s1, opts, onProgress) {
+  const a0 = Math.max(s0, item.start), a1 = Math.min(s1, item.start + item.dur);
+  const speed = item.speed || 1;
+  if (a1 - a0 < 0.3 || item.speedCurve?.points?.length >= 2) return transcribeClip(project, item, opts, onProgress);
+  const part = { ...item, start: 0, dur: a1 - a0, in: (item.in || 0) + (a0 - item.start) * speed, audio: { ...(item.audio || {}), fadeIn: 0, fadeOut: 0 }, keyframes: undefined };
+  const chunks = await transcribeClip(project, part, opts, onProgress);
+  return chunks.map((c) => ({ ...c, timestamp: c.timestamp?.map((t) => (t == null ? t : t + a0)) }));
+}
+
+const norm = (w) => w.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\p{L}\p{N}]/gu, "");
+function similar(a, b) {
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  const m = a.length, n = b.length, d = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]);
+  for (let j = 1; j <= n; j++) d[0][j] = j;
+  for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return 1 - d[m][n] / Math.max(m, n);
+}
+
+/**
+ * Times the words of a text (as the user wrote them) from what was heard: the two word lists are lined up
+ * (allowing for misheard, missing or extra words), heard words give their times, and words that weren't
+ * heard are spread between their neighbours. Returns [{ w, t0, t1 }] whose w's join back to exactly `text`.
+ */
+export function alignWords(text, chunks, start, end) {
+  const toks = text.match(/\s*\S+/g) || [];
+  if (!toks.length) return null;
+  const tail = text.slice(toks.join("").length);
+  if (tail) toks[toks.length - 1] += tail;
+  const heard = chunks.filter((c) => c.text?.trim() && c.timestamp?.[0] != null && !noise(c.text))
+    .map((c) => ({ n: norm(c.text), t0: c.timestamp[0], t1: c.timestamp[1] ?? c.timestamp[0] + 0.3 }))
+    .filter((h) => h.n && h.t1 > start - 0.5 && h.t0 < end + 0.5);
+  const A = toks.map(norm), m = A.length, n = heard.length;
+  // Needleman–Wunsch: best line-up of the written words with the heard ones.
+  const GAP = -0.35, S = Array.from({ length: m + 1 }, () => new Float32Array(n + 1)), B = Array.from({ length: m + 1 }, () => new Uint8Array(n + 1));
+  for (let i = 1; i <= m; i++) { S[i][0] = i * GAP; B[i][0] = 1; }
+  for (let j = 1; j <= n; j++) { S[0][j] = j * GAP; B[0][j] = 2; }
+  for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) {
+    const sim = similar(A[i - 1], heard[j - 1].n);
+    const diag = S[i - 1][j - 1] + (sim >= 0.5 ? sim : sim - 0.4), up = S[i - 1][j] + GAP, left = S[i][j - 1] + GAP;
+    if (diag >= up && diag >= left) { S[i][j] = diag; B[i][j] = 0; } else if (up >= left) { S[i][j] = up; B[i][j] = 1; } else { S[i][j] = left; B[i][j] = 2; }
+  }
+  const at = new Array(m).fill(null);
+  for (let i = m, j = n; i > 0 || j > 0;) {
+    const b = i && j ? B[i][j] : i ? 1 : 2;
+    if (b === 0) { if (similar(A[i - 1], heard[j - 1].n) >= 0.34) at[i - 1] = heard[j - 1]; i--; j--; } else if (b === 1) i--; else j--;
+  }
+  const found = at.filter(Boolean).length;
+  // Words that weren't heard: spread between the nearest timed words (by letters).
+  const out = toks.map((w, i) => ({ w, t0: at[i]?.t0, t1: at[i]?.t1 }));
+  let i = 0;
+  while (i < m) {
+    if (out[i].t0 != null) { i++; continue; }
+    let j = i; while (j < m && out[j].t0 == null) j++;
+    const from = i ? out[i - 1].t1 : start, to = j < m ? out[j].t0 : end;
+    const letters = out.slice(i, j).reduce((a, x) => a + Math.max(1, norm(x.w).length), 0);
+    let c = 0;
+    for (let k = i; k < j; k++) {
+      const l = Math.max(1, norm(out[k].w).length);
+      out[k].t0 = from + ((to - from) * c) / letters; c += l; out[k].t1 = from + ((to - from) * c) / letters;
+    }
+    i = j;
+  }
+  for (let k = 1; k < m; k++) if (out[k].t0 < out[k - 1].t0) out[k].t0 = out[k - 1].t0; // keep the order
+  for (const x of out) x.t1 = Math.max(x.t1, x.t0 + 0.05);
+  return { words: out, found, total: m, heard: n };
+}
+
 /** Not lyrics: Whisper's notes for music or silence ("[Music]", "♪", "(instrumental)"). */
 const noise = (w) => /^\s*[\[(♪♫*]/.test(w) || /^\s*(music|instrumental|applause|silence)\W*$/i.test(w);
 
