@@ -9,6 +9,8 @@ const KEY = "cutline.settings";
 export const DEFAULTS = {
   projectsDir: "", // "" = Documents › Cutline Projects
   autosaveSec: 20, // 0 = only when closing
+  backupMin: 5, // a dated backup copy this often (minutes); 0 = off
+  backupKeep: 20, // backup copies kept per project
   startScreen: "home", // "home" | "last" (open the last project)
   exportRes: "project", // "project" or a short side in px (1080, 720…)
   exportFps: "project",

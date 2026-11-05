@@ -29,6 +29,8 @@ import { VizFields, BeatSyncSection } from "./visualizer.js";
 import { TitleFields, TitleStyleFields } from "./titles.js";
 import { RichText } from "./richtext.js";
 import { FrameFields } from "./frames.js";
+import { StickerFields } from "./stickers.js";
+import { stickerName } from "../stickers.js";
 import { frameName } from "../frames.js";
 import { TextStylePresets, KaraokeSection, TextGlowSection, setStyleOf, joinIntoKaraoke } from "./karaoke.js";
 import { titleName } from "../titles.js";
@@ -692,6 +694,17 @@ const selectAllCaptions = () => {
   toast(`Selected ${ids.length} caption${ids.length === 1 ? "" : "s"}`);
 };
 
+function StickerInspector({ t }) {
+  const [tab, setTab] = useState("sticker");
+  return html`<${Shell} tabs=${[["sticker", "Sticker"], ["animate", "Animation"]]} tab=${tab} setTab=${setTab} note=${stickerName(t.sticker)}>
+    ${tab === "sticker" && html`<${StickerFields} t=${t} /><${TransformSection} kind="text" id=${t.id} />`}
+    ${tab === "animate" && html`<${AnimateSection} kind="text" item=${t} />`}
+    <${SettingsCopyBar} />
+    <${MatchAudioButton} kind="text" item=${t} />
+    <button class="danger wide" onClick=${deleteSelection}><${Icon} n="trash-2" /> Delete</button>
+  <//>`;
+}
+
 function FrameInspector({ t }) {
   const [tab, setTab] = useState("frame");
   return html`<${Shell} tabs=${[["frame", "Frame"], ["animate", "Animation"]]} tab=${tab} setTab=${setTab} note=${frameName(t.frame.type)}>
@@ -786,6 +799,7 @@ function TextInspector({ t }) {
   if (t.viz) return html`<${VizInspector} t=${t} />`;
   if (t.shape) return html`<${ShapeInspector} t=${t} />`;
   if (t.frame) return html`<${FrameInspector} t=${t} />`;
+  if (t.sticker) return html`<${StickerInspector} t=${t} />`;
   return html`<${TextInspectorBody} t=${t} />`;
 }
 

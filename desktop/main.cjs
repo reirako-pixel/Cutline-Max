@@ -1,6 +1,6 @@
 // Cutline desktop app (Electron). Serves the editor from inside the app on 127.0.0.1 and shows it in
 // a window, so it runs on Electron's built-in Chromium (WebCodecs + WebGL2) without Node.js or Chrome.
-const { app, BrowserWindow, shell, ipcMain, dialog, Menu, protocol } = require("electron");
+const { app, BrowserWindow, shell, ipcMain, dialog, Menu, protocol, powerMonitor } = require("electron");
 const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -243,6 +243,46 @@ ipcMain.handle("cutline:recover", async () => {
   try { return await fs.promises.readFile(autosavePath(), "utf8"); } catch { return null; }
 });
 ipcMain.handle("cutline:clear-autosave", () => fs.promises.rm(autosavePath(), { force: true }));
+
+// Backup history: timed copies of each project in <userData>/Backups/<project name>/, newest kept, so work can be
+// brought back even if the project file itself is lost, damaged or saved over by mistake.
+const backupsDir = () => path.join(app.getPath("userData"), "Backups");
+const inBackups = (p) => typeof p === "string" && path.resolve(p).startsWith(backupsDir() + path.sep) && /\.cutline$/i.test(p);
+const lastBackupHash = new Map();
+ipcMain.handle("cutline:backup", async (_e, json, name) => {
+  if (typeof json !== "string" || !json.length) return null;
+  const safe = String(name || "Untitled").replace(/[<>:"/\\|?*\x00-\x1f]/g, "_").replace(/[. ]+$/, "").slice(0, 80) || "Untitled";
+  const hash = crypto.createHash("sha1").update(json).digest("hex");
+  if (lastBackupHash.get(safe) === hash) return null; // nothing changed since the last copy
+  const dir = path.join(backupsDir(), safe);
+  await fs.promises.mkdir(dir, { recursive: true });
+  const d = new Date(), two = (n) => String(n).padStart(2, "0");
+  const file = path.join(dir, `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())} ${two(d.getHours())}-${two(d.getMinutes())}-${two(d.getSeconds())}.cutline`);
+  await writeAtomic(file, json);
+  lastBackupHash.set(safe, hash);
+  // Keep the newest copies only (Settings › Backups).
+  const keep = Math.max(3, Number((await userSettings()).backupKeep) || 20);
+  const files = (await fs.promises.readdir(dir)).filter((f) => /\.cutline$/i.test(f)).sort();
+  for (const old of files.slice(0, Math.max(0, files.length - keep))) await fs.promises.rm(path.join(dir, old), { force: true }).catch(() => {});
+  return file;
+});
+ipcMain.handle("cutline:backup-list", async () => {
+  const out = [];
+  try {
+    for (const proj of await fs.promises.readdir(backupsDir())) {
+      const dir = path.join(backupsDir(), proj);
+      let files = [];
+      try { files = (await fs.promises.readdir(dir)).filter((f) => /\.cutline$/i.test(f)); } catch { continue; }
+      for (const f of files) {
+        const p = path.join(dir, f);
+        try { const st = await fs.promises.stat(p); out.push({ project: proj, path: p, time: st.mtimeMs, size: st.size }); } catch { /* gone */ }
+      }
+    }
+  } catch { /* no backups yet */ }
+  return out.sort((a, b) => b.time - a.time);
+});
+ipcMain.handle("cutline:backup-read", async (_e, p) => (inBackups(p) ? fs.promises.readFile(p, "utf8") : null));
+ipcMain.handle("cutline:backup-folder", async () => { await fs.promises.mkdir(backupsDir(), { recursive: true }); return shell.openPath(backupsDir()); });
 // Small settings file (text presets …) that survives app updates.
 const prefsPath = () => path.join(app.getPath("userData"), "prefs.json");
 ipcMain.handle("cutline:prefs-load", async () => {
@@ -328,6 +368,10 @@ async function createWindow() {
     setTimeout(done, 15000); // never hang on close
   });
   win.on("closed", () => { win = null; });
+  // Windows shutting down or logging off: save right away (there may be no time for the normal close).
+  const saveNow = () => { try { if (win && !win.isDestroyed()) win.webContents.send("cutline:save-now"); } catch { /* window gone */ } };
+  win.on("query-session-end", saveNow);
+  win.on("session-end", saveNow);
   await win.loadURL(`http://127.0.0.1:${port}/`);
 }
 
@@ -425,6 +469,8 @@ else {
     sendOpen(projectArg(argv));
   });
   app.whenReady().then(() => {
+    // The PC going to sleep, locking or shutting down: save first, in case it never wakes up properly.
+    for (const ev of ["suspend", "lock-screen", "shutdown"]) powerMonitor.on(ev, () => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send("cutline:save-now"); });
     protocol.handle("cutline-file", serveMedia);
     // The editor has its own shortcuts (Ctrl+= zooms the timeline, not the page). macOS keeps a minimal
     // menu so Cmd+C/V/X/A/Q still work in text boxes.

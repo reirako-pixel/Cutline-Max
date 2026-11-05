@@ -3,7 +3,7 @@ import { useState } from "react";
 import { edit, findItem, getState, setState, uid, useStore } from "../store.js";
 import { html, Field, Section, Slider, Icon } from "./kit.js";
 import { toast, audioUnder, pause } from "../actions.js";
-import { transcribeRange, alignWords, lyricsModel, LYRICS_LANGUAGES } from "../captions.js";
+import { rangeAudio, transcribeAudio, onsetWords, alignWords, lyricsModel, LYRICS_LANGUAGES } from "../captions.js";
 
 /** Sung / not-yet-sung colour pairs: [name, sung, unsung, outline]. */
 export const KARAOKE_PAIRS = [
@@ -156,7 +156,7 @@ export const setStyleOf = (ids) => (patch) => edit((p) => {
  * Each line keeps its timing: word timing if it has it, otherwise its words spread over its own time.
  */
 export function joinIntoKaraoke(ids) {
-  const list = getState().project.texts.filter((x) => ids.has(x.id) && !x.title && !x.viz && !x.shape && !x.frame).sort((a, b) => a.start - b.start);
+  const list = getState().project.texts.filter((x) => ids.has(x.id) && !x.title && !x.viz && !x.shape && !x.frame && !x.sticker).sort((a, b) => a.start - b.start);
   if (list.length < 2) return toast("Select two or more text lines first");
   const words = list.flatMap((x, i) => {
     let ws = x.words?.length ? x.words.map((w) => ({ ...w }))
@@ -185,17 +185,22 @@ export function joinIntoKaraoke(ids) {
 }
 
 /**
- * "Time words to the singing": listens to the song under the text (only the part the text covers) and
- * lines up the text's own words with when they're sung, so each word lights up on time.
+ * "Time words to the singing": listens to the sound under the text (only the part the text covers) and
+ * lines up the text's own words with when they're sung, so each word lights up on time. The sound is the
+ * song (audio clip) under the text, or else everything you hear there (a video's sound, the text's own sound).
+ * Two ways: listen for the words with the speech model (best), or quickly follow the voice's rhythm (no download).
  */
 function TimeToAudio({ t }) {
   const remembered = (k, d) => { try { return localStorage.getItem(k) || d; } catch { return d; } };
   const [language, setLanguage] = useState(() => remembered("cutline.lyricsLang", "english"));
   const [quality, setQuality] = useState(() => remembered("cutline.lyricsQuality", "better"));
+  const [method, setMethod] = useState(() => remembered("cutline.karaokeTiming", "words"));
   const [status, setStatus] = useState(null);
   const [busy, setBusy] = useState(false);
   const song = useStore((s) => audioUnder(s.project, "text", findItem(s.project, "text", t.id)));
   const songName = useStore((s) => (song ? s.project.media[song.mediaId]?.name : null));
+  const hasSound = useStore((s) => !!song || !!t.sound || s.project.main.some((m) => s.project.media[m.mediaId]?.kind === "video")
+    || (s.project.overlays || []).some((m) => s.project.media[m.mediaId]?.kind === "video"));
   const keep = (k, v, set) => { set(v); try { localStorage.setItem(k, v); } catch { /* ignore */ } };
   const timed = !!t.words?.length;
   const words = (t.text.match(/\S+/g) || []).length;
@@ -204,18 +209,27 @@ function TimeToAudio({ t }) {
     if (getState().playing) pause();
     const project = getState().project, item = findItem(project, "text", t.id);
     const a = audioUnder(project, "text", item);
-    if (!a) return setStatus("There's no music under this text. Put the text over the song on the timeline first.");
+    const s0 = item.start, s1 = item.start + item.dur;
     setBusy(true);
-    setStatus("Getting the song ready…");
+    setStatus("Getting the sound ready…");
     try {
-      const chunks = await transcribeRange(project, a, item.start, item.start + item.dur, { model: lyricsModel(language, quality), language }, (p) => setStatus(
-        p.stage === "audio" ? "Getting the song ready…"
-          : p.stage === "download" ? `Downloading the speech model (first time only)… ${Math.round(p.progress || 0)}%`
-          : "Listening to the singing…"));
-      const res = alignWords(item.text, chunks, item.start, item.start + item.dur);
-      if (!res || !res.heard) { setStatus("No singing was heard under this text. Check the language, or try Better accuracy."); setBusy(false); return; }
+      const piece = await rangeAudio(project, a, s0, s1);
+      let res;
+      if (method === "quick") res = onsetWords(item.text, piece, s0, s1);
+      else {
+        const chunks = await transcribeAudio(piece, { model: lyricsModel(language, quality), language }, (p) => setStatus(
+          p.stage === "download" ? `Downloading the speech model (first time only)… ${Math.round(p.progress || 0)}%` : "Listening to the singing…"));
+        res = alignWords(item.text, chunks, s0, s1);
+      }
+      if (!res || !res.heard) {
+        setStatus(method === "quick" ? "No voice was found under this text. Is the sound under it on the timeline?"
+          : "No singing was heard under this text. Check the language, try Better accuracy, or use Quick timing.");
+        setBusy(false); return;
+      }
       edit((p) => { const x = findItem(p, "text", t.id); if (x) { x.words = res.words; delete x.spans; } });
-      setStatus(res.found === res.total ? `Done: all ${res.total} words were found in the singing. Play it to check.`
+      setStatus(method === "quick"
+        ? `Done: ${res.found} of ${res.total} words start on a sound of the voice${res.found < res.total ? "; the others are placed between them" : ""}. Play it to check.`
+        : res.found === res.total ? `Done: all ${res.total} words were found in the singing. Play it to check.`
         : `Done: ${res.found} of ${res.total} words were found in the singing; the others are placed between them. Play it to check.`);
     } catch (err) {
       setStatus("Couldn't time the words: " + err.message);
@@ -224,7 +238,13 @@ function TimeToAudio({ t }) {
   };
   return html`<div class="kara-time">
     ${perWord > 2.5 && html`<p class="warn small">Each word lasts about ${perWord.toFixed(1)} s now (the words are spread over the text's whole time), so the highlight will look stuck. Time the words to the singing below, or trim the text to the verse.</p>`}
-    <div class="grid2">
+    <${Field} label="Time the words by">
+      <select value=${method} disabled=${busy} onChange=${(e) => keep("cutline.karaokeTiming", e.target.value, setMethod)}>
+        <option value="words">Listening for the words (best, speech model)</option>
+        <option value="quick">Quick: the voice's rhythm (instant, no download)</option>
+      </select>
+    <//>
+    ${method === "words" && html`<div class="grid2">
       <${Field} label="Language">
         <select value=${language} disabled=${busy} onChange=${(e) => keep("cutline.lyricsLang", e.target.value, setLanguage)}>
           ${Object.entries(LYRICS_LANGUAGES).map(([k, v]) => html`<option key=${k} value=${k}>${v}</option>`)}
@@ -235,14 +255,16 @@ function TimeToAudio({ t }) {
           <option value="better">Better (slower)</option><option value="fast">Fast</option>
         </select>
       <//>
-    </div>
-    <button class="primary wide" disabled=${busy || !song} onClick=${run}
-      title=${song ? `Listens to “${songName}” where this text is, and times each word to the singing` : "Put this text over a song on the timeline first"}>
+    </div>`}
+    <button class="primary wide" disabled=${busy || !hasSound} onClick=${run}
+      title=${song ? `Listens to “${songName}” where this text is, and times each word to the singing` : hasSound ? "Listens to the sound under this text (video sound, the text's own sound)" : "Put this text over a song or a video with sound first"}>
       <${Icon} n="audio-lines" /> ${busy ? "Listening…" : timed ? "Time the words again" : "Time words to the singing"}</button>
-    ${!song && html`<p class="muted small">Put this text over a song (an audio clip) on the timeline, then press the button.</p>`}
+    ${!hasSound && html`<p class="muted small">Put this text over a song (audio clip) or a video with sound on the timeline, then press the button.</p>`}
+    ${hasSound && !song && html`<p class="muted small">No audio clip under this text, so it listens to everything you hear there (video sound, the text's own sound).</p>`}
     ${status && html`<p class="status">${busy && html`<span class="spin" /> `}${status}</p>`}
     ${timed && !busy && html`<button class="mini" onClick=${() => edit((p) => { const x = findItem(p, "text", t.id); if (x) delete x.words; })}
       title="Forget the timing and spread the words evenly again">Clear word timing</button>`}
-    <p class="muted small">Uses the same speech model as Auto lyrics (it runs on your computer and downloads once). If you move the text on the timeline afterwards, press the button again.</p>
+    <p class="muted small">${method === "quick" ? "Quick timing follows when the voice starts each sound; drums can fool it, so check by playing. For exact timing, listen for the words."
+      : "Uses the same speech model as Auto lyrics (it runs on your computer and downloads once)."} If you move the text on the timeline afterwards, press the button again.</p>
   </div>`;
 }

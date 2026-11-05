@@ -270,7 +270,45 @@ export function startAutosave() {
     // Untitled: a recovery copy (restored automatically if Cutline crashes); closing saves it properly.
     try { await desktop.autosave(await serialize(p)); setState({ autoSavedAt: Date.now() }); } catch { /* ignore */ }
   }, 5000);
-  desktop.onBeforeClose?.(() => saveQuietly());
+  // Backup history: every few minutes a dated copy goes to Cutline Data › Backups (Settings › Backups).
+  setInterval(() => backupNow(), 30000);
+  desktop.onBeforeClose?.(async () => { await saveQuietly(); await backupNow(true); });
+  // Windows shutting down, the PC sleeping or locking: save at once.
+  desktop.onSaveNow?.(() => saveNow());
+  // Switching to another app: a quick save too (a crash or power cut often happens while you're away).
+  let blurTimer = null;
+  window.addEventListener("blur", () => { clearTimeout(blurTimer); blurTimer = setTimeout(() => saveNow(), 1500); });
+}
+
+/** Saves the work right away: to its file when it has one, otherwise to the crash-recovery copy. */
+export async function saveNow() {
+  if (!desktop) return;
+  const p = rootProject();
+  if (!hasContent(p) || !isDirty()) return;
+  if (currentPath) await saveQuietly();
+  else try { await desktop.autosave(await serialize(p)); setState({ autoSavedAt: Date.now() }); } catch { /* ignore */ }
+}
+
+let lastBackupAt = Date.now();
+/** A dated copy of the project in the backup history (skipped when nothing changed since the last copy). */
+export async function backupNow(force = false) {
+  if (!desktop?.backup) return;
+  const every = setting("backupMin") ?? 5; // minutes; 0 = no backups
+  if (!every || (!force && Date.now() - lastBackupAt < every * 60000)) return;
+  const p = rootProject();
+  if (!hasContent(p)) return;
+  lastBackupAt = Date.now();
+  try { await desktop.backup(await serialize(p), projectName()); } catch { /* ignore */ }
+}
+
+/** Opens a copy from the backup history; it counts as unsaved, so saving asks where (the original stays as it was). */
+export async function openBackup(path) {
+  const text = await desktop.backupRead(path);
+  if (!text) throw new Error("That backup can't be read");
+  if (!(await leaveCurrent())) return false;
+  await loadProject(text);
+  savedSnapshot = null;
+  return true;
 }
 
 /** Loads unsaved work left by a crash; it counts as unsaved, so closing saves it to a real file. */

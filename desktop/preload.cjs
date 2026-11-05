@@ -14,6 +14,13 @@ contextBridge.exposeInMainWorld("cutlineDesktop", {
   autosave: (json) => ipcRenderer.invoke("cutline:autosave", json),
   recover: () => ipcRenderer.invoke("cutline:recover"),
   clearAutosave: () => ipcRenderer.invoke("cutline:clear-autosave"),
+  /** Backup history (Menu › Restore from backup). */
+  backup: (json, name) => ipcRenderer.invoke("cutline:backup", json, name),
+  backupList: () => ipcRenderer.invoke("cutline:backup-list"),
+  backupRead: (path) => ipcRenderer.invoke("cutline:backup-read", path),
+  backupFolder: () => ipcRenderer.invoke("cutline:backup-folder"),
+  /** Windows is shutting down, the PC sleeps or locks: save at once. */
+  onSaveNow: (cb) => ipcRenderer.on("cutline:save-now", () => cb()),
   loadPrefs: () => ipcRenderer.invoke("cutline:prefs-load"),
   savePrefs: (prefs) => ipcRenderer.invoke("cutline:prefs-save", prefs),
   setTitle: (name) => ipcRenderer.send("cutline:title", name),

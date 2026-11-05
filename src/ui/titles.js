@@ -144,6 +144,9 @@ export const STYLE_PRESETS = [
     ["Template", { fill: { type: "template" } }], ["White", solid("#ffffff")], ["Yellow", solid("#ffe14d")], ["Black", solid("#111111")],
     ["Sunset", grad("#ffb02e", "#ff3c8e")], ["Ocean", grad("#3df2ff", "#3d5bff")], ["Mint", grad("#d4ff6b", "#1fcf9a")],
     ["Candy", grad("#ff7ad9", "#8b6bff", 0)], ["Fire", grad("#ffe14d", "#ff2d2d")], ["Ice", grad("#ffffff", "#5ec8ff")],
+    ["Peach", grad("#ffd3a5", "#fd6585")], ["Lagoon", grad("#43e97b", "#38f9d7", 0)], ["Grape", grad("#c471f5", "#fa71cd", 0)],
+    ["Lemon", grad("#fff720", "#3cd500")], ["Night", grad("#a1c4fd", "#c2e9fb")], ["Cherry", grad("#ff0844", "#ffb199")],
+    ["Red", solid("#ff2d2d")], ["Pink", solid("#ff3cac")], ["Cyan", solid("#3df2ff")], ["Lime", solid("#9dff3d")], ["Purple", solid("#b46bff")], ["Orange", solid("#ff8a1f")],
   ]],
   ["Textures", TEXTURE_NAMES.map(([id, name]) => [name, { fill: { type: "texture", texture: id } }])],
   ["Lyrics & karaoke", [
@@ -153,10 +156,49 @@ export const STYLE_PRESETS = [
     ["Lyrics yellow", { ...solid("#ffe14d"), stroke: { on: true, color: "#1a1a1a", width: 6, blur: 0 }, shadow: { on: false }, glow: { on: false } }],
     ...KARAOKE_PAIRS.map(([name, sung, unsung, outline]) => [`Karaoke ${{ Cyan: "blue", Pink: "pink", Gold: "gold" }[name] || name.toLowerCase()}`, karaoke(sung, outline, unsung)]),
   ]],
+  ["Neon", [
+    ["Neon pink", { ...solid("#ffe6f6"), stroke: { on: true, color: "#ff2fb4", width: 3, blur: 2 }, shadow: { on: false }, glow: { on: true, color: "#ff2fb4", size: 34, strength: 3 } }],
+    ["Neon blue", { ...solid("#e6fbff"), stroke: { on: true, color: "#00c8ff", width: 3, blur: 2 }, shadow: { on: false }, glow: { on: true, color: "#00c8ff", size: 34, strength: 3 } }],
+    ["Neon green", { ...solid("#eaffe6"), stroke: { on: true, color: "#39ff14", width: 3, blur: 2 }, shadow: { on: false }, glow: { on: true, color: "#39ff14", size: 32, strength: 3 } }],
+    ["Neon purple", { ...solid("#f3e6ff"), stroke: { on: true, color: "#a640ff", width: 3, blur: 2 }, shadow: { on: false }, glow: { on: true, color: "#a640ff", size: 34, strength: 3 } }],
+    ["Neon orange", { ...solid("#fff1e0"), stroke: { on: true, color: "#ff7a00", width: 3, blur: 2 }, shadow: { on: false }, glow: { on: true, color: "#ff7a00", size: 32, strength: 3 } }],
+    ["Neon sign", { ...grad("#ff3cac", "#784ba0", 0), stroke: { on: true, color: "#ffffff", width: 2, blur: 1 }, shadow: { on: false }, glow: { on: true, color: "#ff3cac", size: 40, strength: 2 } }],
+  ]],
+  ["Retro & pop", [
+    ["Retro sunset", { ...grad("#ffe14d", "#ff3c8e", 90), stroke: { on: true, color: "#2b0a3d", width: 8, blur: 0 }, shadow: { on: true, color: "#00e5ff", opacity: 1, angle: 45, dist: 10, blur: 0 }, glow: { on: false } }],
+    ["80s chrome", { fill: { type: "texture", texture: "chrome" }, stroke: { on: true, color: "#1a0b2e", width: 6, blur: 0 }, shadow: { on: true, color: "#ff2fb4", opacity: 1, angle: 60, dist: 8, blur: 0 }, glow: { on: false } }],
+    ["Comic pop", { ...solid("#ffe14d"), stroke: { on: true, color: "#111111", width: 12, blur: 0 }, shadow: { on: true, color: "#ff2d2d", opacity: 1, angle: 45, dist: 12, blur: 0 }, glow: { on: false } }],
+    ["Bubblegum", { ...grad("#ff9de2", "#ffd1f2", 90), stroke: { on: true, color: "#ffffff", width: 10, blur: 0 }, shadow: { on: true, color: "#c2187a", opacity: 0.8, angle: 90, dist: 8, blur: 4 }, glow: { on: false } }],
+    ["Vaporwave", { ...grad("#00e5ff", "#ff71ce", 0), stroke: { on: false }, shadow: { on: true, color: "#6a00ff", opacity: 1, angle: 45, dist: 9, blur: 0 }, glow: { on: false } }],
+    ["Arcade", { ...solid("#39ff14"), stroke: { on: true, color: "#002b00", width: 6, blur: 0 }, shadow: { on: true, color: "#000000", opacity: 1, angle: 45, dist: 8, blur: 0 }, glow: { on: true, color: "#39ff14", size: 18, strength: 1 } }],
+    ["Sticker", { ...solid("#ffffff"), stroke: { on: true, color: "#ff3c8e", width: 14, blur: 0 }, shadow: { on: true, color: "#000000", opacity: 0.45, angle: 90, dist: 6, blur: 8 }, glow: { on: false } }],
+    ["Pastel", { ...grad("#a8e6ff", "#ffd6e7", 90), stroke: { on: true, color: "#5a5a8a", width: 4, blur: 0 }, shadow: { on: false }, glow: { on: false } }],
+  ]],
+  ["Elegant & metallic", [
+    ["Gold luxe", { fill: { type: "texture", texture: "gold" }, stroke: { on: true, color: "#3a2600", width: 2, blur: 0 }, shadow: { on: true, color: "#000000", opacity: 0.6, angle: 90, dist: 5, blur: 12 }, glow: { on: false } }],
+    ["Silver", { ...grad("#f5f7fa", "#8a939e", 90), stroke: { on: true, color: "#2b3138", width: 2, blur: 0 }, shadow: { on: true, color: "#000000", opacity: 0.55, angle: 90, dist: 4, blur: 10 }, glow: { on: false } }],
+    ["Rose gold", { ...grad("#ffe1d6", "#c97b6b", 90), stroke: { on: true, color: "#5a2b22", width: 2, blur: 0 }, shadow: { on: true, color: "#000000", opacity: 0.5, angle: 90, dist: 4, blur: 10 }, glow: { on: false } }],
+    ["Marble", { fill: { type: "texture", texture: "marble" }, stroke: { on: true, color: "#333333", width: 2, blur: 0 }, shadow: { on: true, color: "#000000", opacity: 0.4, angle: 90, dist: 3, blur: 8 }, glow: { on: false } }],
+    ["Champagne glow", { ...solid("#fff4d6"), stroke: { on: false }, shadow: { on: false }, glow: { on: true, color: "#ffcf6b", size: 26, strength: 2 } }],
+    ["Classic serif", { ...solid("#ffffff"), stroke: { on: false }, shadow: { on: true, color: "#000000", opacity: 0.7, angle: 90, dist: 3, blur: 14 }, glow: { on: false } }],
+    ["Glitter gold", { fill: { type: "texture", texture: "glitter" }, stroke: { on: true, color: "#2b1a00", width: 3, blur: 0 }, shadow: { on: false }, glow: { on: true, color: "#ffd23f", size: 18, strength: 1 } }],
+  ]],
+  ["Cinematic", [
+    ["Blockbuster", { ...grad("#ffffff", "#9aa6b2", 90), stroke: { on: false }, shadow: { on: true, color: "#000000", opacity: 0.8, angle: 90, dist: 6, blur: 18 }, glow: { on: true, color: "#6ab8ff", size: 20, strength: 1 } }],
+    ["Horror", { ...grad("#ff2d2d", "#4a0000", 90), stroke: { on: true, color: "#000000", width: 4, blur: 2 }, shadow: { on: true, color: "#000000", opacity: 1, angle: 90, dist: 6, blur: 10 }, glow: { on: true, color: "#ff0000", size: 24, strength: 1 } }],
+    ["Sci-fi", { ...grad("#e6fbff", "#3d7bff", 90), stroke: { on: true, color: "#00e5ff", width: 2, blur: 1 }, shadow: { on: false }, glow: { on: true, color: "#00b3ff", size: 28, strength: 2 } }],
+    ["Western", { ...grad("#ffd27a", "#8a4b12", 90), stroke: { on: true, color: "#2b1400", width: 6, blur: 0 }, shadow: { on: true, color: "#000000", opacity: 0.7, angle: 45, dist: 8, blur: 4 }, glow: { on: false } }],
+    ["Fire title", { fill: { type: "texture", texture: "fire" }, stroke: { on: true, color: "#2a0500", width: 4, blur: 0 }, shadow: { on: false }, glow: { on: true, color: "#ff5a00", size: 30, strength: 2 } }],
+    ["Frozen", { fill: { type: "texture", texture: "ice" }, stroke: { on: true, color: "#0a2a40", width: 3, blur: 0 }, shadow: { on: false }, glow: { on: true, color: "#9fdcff", size: 26, strength: 2 } }],
+    ["Galaxy", { fill: { type: "texture", texture: "galaxy" }, stroke: { on: true, color: "#ffffff", width: 2, blur: 0 }, shadow: { on: false }, glow: { on: true, color: "#b46bff", size: 28, strength: 2 } }],
+    ["Hologram", { fill: { type: "texture", texture: "holo" }, stroke: { on: true, color: "#ffffff", width: 2, blur: 1 }, shadow: { on: false }, glow: { on: true, color: "#7ffcff", size: 22, strength: 1 } }],
+  ]],
   ["Outlines", [
     ["None", { stroke: { on: false } }], ["Thin black", { stroke: { on: true, color: "#000000", width: 3, blur: 0 } }],
     ["Thick black", { stroke: { on: true, color: "#000000", width: 10, blur: 0 } }], ["White", { stroke: { on: true, color: "#ffffff", width: 6, blur: 0 } }],
     ["Soft blur", { stroke: { on: true, color: "#000000", width: 8, blur: 6 } }], ["Neon", { stroke: { on: true, color: "#00f0ff", width: 4, blur: 3 } }],
+    ["Pink", { stroke: { on: true, color: "#ff3cac", width: 6, blur: 0 } }], ["Yellow", { stroke: { on: true, color: "#ffe14d", width: 6, blur: 0 } }],
+    ["Double thick", { stroke: { on: true, color: "#111111", width: 18, blur: 0 } }], ["Gold", { stroke: { on: true, color: "#d4af37", width: 5, blur: 0 } }],
   ]],
   ["Shadows & glows", [
     ["None", { shadow: { on: false }, glow: { on: false } }],
@@ -166,6 +208,9 @@ export const STYLE_PRESETS = [
     ["White glow", { glow: { on: true, color: "#ffffff", size: 24, strength: 2 } }],
     ["Pink glow", { glow: { on: true, color: "#ff3cac", size: 30, strength: 2 } }],
     ["Cyan glow", { glow: { on: true, color: "#00f0ff", size: 30, strength: 2 } }],
+    ["Gold glow", { glow: { on: true, color: "#ffcf3f", size: 30, strength: 2 } }], ["Green glow", { glow: { on: true, color: "#39ff14", size: 30, strength: 2 } }],
+    ["Purple glow", { glow: { on: true, color: "#a640ff", size: 34, strength: 2 } }], ["Black halo", { glow: { on: true, color: "#000000", size: 26, strength: 3 } }],
+    ["Long shadow", { shadow: { on: true, color: "#000000", opacity: 0.85, angle: 45, dist: 22, blur: 2 } }], ["Colour shadow", { shadow: { on: true, color: "#ff3cac", opacity: 1, angle: 45, dist: 10, blur: 0 } }],
   ]],
 ];
 
@@ -229,7 +274,7 @@ export function TitleStyleFields({ t }) {
         </div>`)}
       </div>
     <//>
-    ${STYLE_PRESETS.map(([group, list]) => html`<${Section} key=${group} title=${group} open=${group !== "Textures"}>
+    ${STYLE_PRESETS.map(([group, list]) => html`<${Section} key=${group} title=${`${group} (${list.length})`} open=${group === "Fills & gradients" || group === "Neon"}>
       <div class="style-grid">
         ${list.map(([name]) => html`<button key=${name} class="style-chip" title=${`${group}: ${name}`} onClick=${() => apply(presetLooks.get(`${group}|${name}`))}>
           <${StyleSwatch} look=${presetLooks.get(`${group}|${name}`)} /><span>${name}</span></button>`)}

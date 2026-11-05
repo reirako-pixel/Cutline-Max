@@ -61,6 +61,95 @@ export async function transcribeRange(project, item, s0, s1, opts, onProgress) {
   return chunks.map((c) => ({ ...c, timestamp: c.timestamp?.map((t) => (t == null ? t : t + a0)) }));
 }
 
+/**
+ * The sound under part of the timeline (s0–s1) at 16 kHz mono: one audio clip on its own when `item` is given,
+ * otherwise everything you hear there (music, video sound, text sounds). Returns { audio, offset }.
+ */
+export async function rangeAudio(project, item, s0, s1) {
+  const SR = 16000;
+  if (!item) {
+    const mix = await mixAudio(project, SR, 1);
+    const d = mix.getChannelData(0), a = Math.max(0, s0);
+    return { audio: d.slice(Math.floor(a * SR), Math.ceil(Math.max(a, s1) * SR)), offset: a };
+  }
+  const a0 = Math.max(s0, item.start), a1 = Math.min(s1, item.start + item.dur);
+  const whole = a1 - a0 < 0.3 || item.speedCurve?.points?.length >= 2;
+  const part = whole ? { ...item, start: 0 }
+    : { ...item, start: 0, dur: a1 - a0, in: (item.in || 0) + (a0 - item.start) * (item.speed || 1), audio: { ...(item.audio || {}), fadeIn: 0, fadeOut: 0 }, keyframes: undefined };
+  const solo = { ...project, main: [], overlays: [], texts: [], effects: [], trackState: {}, audio: [{ ...part, mute: false }] };
+  const mix = await mixAudio(solo, SR, 1);
+  return { audio: mix.getChannelData(0).slice(), offset: whole ? item.start : a0 };
+}
+
+/** Whisper over a piece of sound from rangeAudio; words timed on the timeline. */
+export async function transcribeAudio({ audio, offset }, { model, language }, onProgress) {
+  const chunks = await runWhisper(audio.slice(), { model, language: model.endsWith(".en") ? null : language }, onProgress);
+  return chunks.map((c) => ({ ...c, timestamp: c.timestamp?.map((t) => (t == null ? t : t + offset)) }));
+}
+
+/**
+ * Quick word timing without a speech model: finds where the voice starts new sounds (rises in loudness in the
+ * voice's pitch range) and gives each written word the next one. Less exact than listening for the words,
+ * but instant. Returns { words: [{ w, t0, t1 }], found, total } like alignWords.
+ */
+export function onsetWords(text, { audio, offset }, start, end) {
+  const toks = text.match(/\s*\S+/g) || [];
+  if (!toks.length) return null;
+  const tail = text.slice(toks.join("").length);
+  if (tail) toks[toks.length - 1] += tail;
+  const SR = 16000, hop = 160, win = 320;
+  // Keep roughly the voice's range (about 250 Hz – 3.5 kHz) so the bass and hi-hats count less.
+  const hpA = Math.exp((-2 * Math.PI * 250) / SR), lpA = Math.exp((-2 * Math.PI * 3500) / SR);
+  const x = new Float32Array(audio.length);
+  let hp = 0, prevIn = 0, lp = 0;
+  for (let i = 0; i < audio.length; i++) {
+    hp = hpA * (hp + audio[i] - prevIn); prevIn = audio[i];
+    lp = (1 - lpA) * hp + lpA * lp; x[i] = lp;
+  }
+  const frames = Math.max(0, Math.floor((x.length - win) / hop));
+  const L = new Float32Array(frames);
+  for (let k = 0; k < frames; k++) {
+    let e = 0;
+    for (let i = k * hop, n = i + win; i < n; i++) e += x[i] * x[i];
+    L[k] = Math.log10(e / win + 1e-9);
+  }
+  // Novelty: how much louder than the moment before.
+  const nov = new Float32Array(frames);
+  for (let k = 5; k < frames; k++) { let m = 0; for (let j = k - 5; j < k; j++) m += L[j]; nov[k] = Math.max(0, L[k] - m / 5); }
+  const floor = [...L].sort((a, b) => a - b)[Math.floor(frames * 0.2)] ?? -9;
+  const mean = nov.reduce((a, b) => a + b, 0) / (frames || 1);
+  const sd = Math.sqrt(nov.reduce((a, b) => a + (b - mean) ** 2, 0) / (frames || 1));
+  const peaks = [];
+  for (let k = 6; k < frames - 6; k++) {
+    if (nov[k] < mean + 0.4 * sd || L[k] < floor + 0.3) continue;
+    let top = true;
+    for (let j = k - 6; j <= k + 6; j++) if (nov[j] > nov[k]) { top = false; break; }
+    if (top) peaks.push({ t: offset + (k * hop) / SR, s: nov[k] });
+  }
+  const m = toks.length;
+  let picked = peaks.filter((p) => p.t >= start - 0.05 && p.t < end - 0.1);
+  if (picked.length > m) { // keep the strongest, a little apart, in time order
+    const keep = [];
+    for (const p of [...picked].sort((a, b) => b.s - a.s)) {
+      if (keep.length >= m) break;
+      if (keep.every((q) => Math.abs(q.t - p.t) > 0.12)) keep.push(p);
+    }
+    picked = keep;
+  }
+  let times = picked.map((p) => p.t).sort((a, b) => a - b);
+  const found = times.length;
+  if (!times.length) times = [start];
+  while (times.length < m) { // too few: split the longest gaps
+    const ends = [...times, end];
+    let gi = 0, gl = -1;
+    for (let i = 0; i < times.length; i++) if (ends[i + 1] - ends[i] > gl) { gl = ends[i + 1] - ends[i]; gi = i; }
+    times.splice(gi + 1, 0, times[gi] + gl / 2);
+  }
+  const words = toks.map((w, i) => ({ w, t0: times[i], t1: Math.min(i + 1 < m ? times[i + 1] : end, times[i] + 1.5) }));
+  for (const wd of words) wd.t1 = Math.max(wd.t1, wd.t0 + 0.05);
+  return { words, found: Math.min(found, m), total: m, heard: peaks.length };
+}
+
 const norm = (w) => w.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\p{L}\p{N}]/gu, "");
 function similar(a, b) {
   if (!a || !b) return 0;

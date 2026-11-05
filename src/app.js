@@ -26,6 +26,8 @@ import { Timeline, dragGesture, setToggle } from "./ui/timeline.js";
 import { MaskHandles, CropBox } from "./ui/mask.js";
 import { ShapesTab } from "./ui/shapes.js";
 import { FramesTab } from "./ui/frames.js";
+import { StickersTab } from "./ui/stickers.js";
+import { stickerName } from "./stickers.js";
 import { frameName } from "./frames.js";
 import { VisualizerTab } from "./ui/visualizer.js";
 import { TitlesTab } from "./ui/titles.js";
@@ -42,7 +44,7 @@ import { EFFECT_CATEGORIES, EFFECTS, fxPlace } from "./fx.js";
 import { linkWebFonts, loadProjectFonts, loadSystemFonts, loadRecentFonts } from "./ui/fonts.js";
 import { loadTextPresets, addDefaultText } from "./presets.js";
 import {
-  saveProject, openProject, newProject, relink, startAutosave, checkRecovery, restoreRecovery, loadProject, desktop, projectName, openFromDisk, openLastProject,
+  saveProject, openProject, newProject, relink, startAutosave, openBackup, checkRecovery, restoreRecovery, loadProject, desktop, projectName, openFromDisk, openLastProject,
 } from "./project-io.js";
 
 const additiveKey = (e) => e.shiftKey || e.ctrlKey || e.metaKey;
@@ -185,6 +187,7 @@ function MainMenu({ onShortcuts, onExport }) {
       <button onClick=${run(() => (desktop ? openProject() : input.current.click()))}>Open… <kbd>Ctrl+O</kbd></button>
       <button onClick=${run(() => saveProject())}>Save <kbd>Ctrl+S</kbd></button>
       <button onClick=${run(() => saveProject({ saveAs: true }))}>Save as… <kbd>Ctrl+Shift+S</kbd></button>
+      ${desktop && html`<button onClick=${run(() => setState({ backupsOpen: true }))}>Restore from backup…</button>`}
       <hr />
       <button onClick=${run(() => document.getElementById("import-any")?.click())}>Import media… <kbd>Ctrl+I</kbd></button>
       <button onClick=${run(onExport)}>Export video… <kbd>Ctrl+E</kbd></button>
@@ -232,6 +235,7 @@ const LIB_TABS = [
   ["elements", "Elements", "shapes"],
   ["shapes", "Shapes", "triangle"],
   ["frames", "Frames", "frame"],
+  ["stickers", "Stickers", "sticker"],
   ["audio", "Audio", "music"],
   ["visualizer", "Visualizer", "audio-waveform"],
   ["text", "Text", "type"],
@@ -247,6 +251,7 @@ const SUB_NAV = {
   media: [["library", "Library"], ["kits", "My kits"]],
   elements: [["mine", "My elements"]],
   shapes: [["basic", "Shapes"], ["arrows", "Arrows"]],
+  stickers: [["emoji", "Emoji"], ["text", "Text stickers"]],
   frames: [["all", "All frames"], ["paper", "Paper"], ["elegant", "Elegant"], ["fun", "Fun & film"]],
   audio: [["music", "Music & sounds"], ["tts", "Text to speech"], ["mine", "My presets"]],
   text: [["mine", "My presets"], ["add", "Add text"], ["presets", "Text presets"], ["captions", "Auto captions"]],
@@ -305,6 +310,7 @@ function LeftPanel() {
         ${tab === "elements" && html`<${ElementsTab} />`}
         ${tab === "shapes" && html`<${ShapesTab} part=${sub} />`}
         ${tab === "frames" && html`<${FramesTab} part=${sub} />`}
+        ${tab === "stickers" && html`<${StickersTab} part=${sub} />`}
         ${tab === "visualizer" && html`<${VisualizerTab} part=${sub} />`}
         ${tab === "titles" && html`<${TitlesTab} part=${sub} />`}
         ${tab === "audio" && (sub === "mine" ? html`<${AudioPresetsTab} />` : html`<${AudioTab} part=${sub} />`)}
@@ -604,6 +610,7 @@ function itemLabel(project, kind, it) {
     if (it.viz) return ["audio-waveform", `Visualizer: ${it.vizName || vizStyleName(it.viz.style)}`];
     if (it.shape) return ["shapes", "Shape"];
     if (it.frame) return ["frame", `Frame: ${frameName(it.frame.type)}`];
+    if (it.sticker) return ["sticker", stickerName(it.sticker)];
     return ["type", `${it.caption ? "Caption" : "Text"}: ${it.text.replace(/\s+/g, " ").slice(0, 30)}`];
   }
   if (kind === "overlay") return ["layers", `Layer: ${media}`];
@@ -796,7 +803,7 @@ function TransformOverlay({ rect }) {
           onPointerDown=${(e) => startScale(e, kind, item)} />`)}
         ${single && (item.shape || item.viz) && ["n", "s", "e", "w"].map((c) => html`<div key=${c} class=${"knob " + c} title=${`Drag to stretch the ${c === "n" || c === "s" ? "height" : "width"}`}
           onPointerDown=${(e) => startStretch(e, item, c)} />`)}
-        ${single && kind === "text" && !item.shape && !item.viz && !item.frame && ["w", "e"].map((c) => html`<div key=${c} class=${"knob " + c} title="Drag to make the text box wider or narrower (wider = fewer lines)"
+        ${single && kind === "text" && !item.shape && !item.viz && !item.frame && !item.sticker && ["w", "e"].map((c) => html`<div key=${c} class=${"knob " + c} title="Drag to make the text box wider or narrower (wider = fewer lines)"
           onPointerDown=${(e) => startBoxWidth(e, item)} />`)}
         ${single && html`<div class="rot" title="Rotate (Shift snaps to 15°)" onPointerDown=${(e) => startRotate(e, kind, item)} />`}
       </div>`;
@@ -1273,6 +1280,35 @@ function RecoveryBar() {
   </div>`;
 }
 
+/** Menu › Restore from backup: the dated copies Cutline kept, newest first; opening one leaves the original file alone. */
+function BackupsDialog({ onClose }) {
+  const [list, setList] = useState(null);
+  const [filter, setFilter] = useState("");
+  useEffect(() => { desktop?.backupList().then(setList).catch(() => setList([])); }, []);
+  const shown = (list || []).filter((b) => !filter || b.project === filter);
+  const projects = [...new Set((list || []).map((b) => b.project))];
+  const when = (t) => { const d = new Date(t); return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`; };
+  const ago = (t) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`; };
+  return html`<${Modal} title="Restore from backup" onClose=${onClose}>
+    <p class="muted">Cutline keeps dated copies of your projects (Settings › Projects › Backup copies). Opening one loads it as a new, unsaved project, so your current file isn't changed.</p>
+    ${projects.length > 1 && html`<select value=${filter} onChange=${(e) => setFilter(e.target.value)} style=${{ width: "100%" }}>
+      <option value="">All projects</option>${projects.map((p) => html`<option key=${p} value=${p}>${p}</option>`)}
+    </select>`}
+    <div class="backup-list">
+      ${list === null && html`<p class="muted">Loading…</p>`}
+      ${list && !shown.length && html`<p class="muted">No backups yet. They're made every few minutes while you work.</p>`}
+      ${shown.map((b) => html`<div key=${b.path} class="backup-row">
+        <div><b>${b.project}</b><span class="muted small">${when(b.time)} · ${ago(b.time)} · ${Math.max(1, Math.round(b.size / 1024))} KB</span></div>
+        <button class="primary" onClick=${async () => {
+          try { if (await openBackup(b.path)) { onClose(); toast(`Opened the backup from ${when(b.time)}. Save it to keep it.`, 4000); } }
+          catch (err) { toast(err.message); }
+        }}>Open</button>
+      </div>`)}
+    </div>
+    <div class="row between"><button onClick=${() => desktop.backupFolder()}>Open the backups folder</button><button onClick=${onClose}>Close</button></div>
+  <//>`;
+}
+
 function Toast() {
   const msg = useStore((s) => s.toast);
   return msg ? html`<div class="toast">${msg}</div>` : null;
@@ -1460,6 +1496,7 @@ function App() {
     ${dialog === "export" && html`<${ExportDialog} onClose=${() => setDialog(null)} />`}
     <${RemoveMediaDialog} />
     ${dialog === "shortcuts" && html`<${ShortcutsDialog} onClose=${() => setDialog(null)} />`}
+    ${useStore((s) => s.backupsOpen) && html`<${BackupsDialog} onClose=${() => setState({ backupsOpen: false })} />`}
     ${useStore((s) => s.settingsOpen) && html`<${SettingsDialog} start=${getState().settingsOpen} onClose=${() => setState({ settingsOpen: false })} />`}
   </div>`;
 }

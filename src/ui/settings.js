@@ -76,6 +76,12 @@ export function SettingsDialog({ onClose, start }) {
               <${Folder} k="projectsDir" empty="Documents › Cutline Projects" /><//>
             <${Row} label="Autosave" hint="Projects that have a file are saved quietly this often (and always when you close Cutline).">
               <${Select} k="autosaveSec" num options=${[[10, "Every 10 seconds"], [20, "Every 20 seconds"], [60, "Every minute"], [300, "Every 5 minutes"], [0, "Only when closing"]]} /><//>
+            ${window.cutlineDesktop && html`
+              <${Row} label="Backup copies" hint="Besides autosave, Cutline keeps dated copies of your project, so you can go back if the file is lost, damaged or saved over (Menu › Restore from backup). It also saves at once when Windows shuts down or the PC sleeps.">
+                <${Select} k="backupMin" num options=${[[2, "Every 2 minutes"], [5, "Every 5 minutes"], [10, "Every 10 minutes"], [30, "Every 30 minutes"], [0, "Off"]]} /><//>
+              <${Row} label="Keep">
+                <${Select} k="backupKeep" num options=${[[10, "Last 10 copies per project"], [20, "Last 20 copies per project"], [50, "Last 50 copies per project"]]} /><//>
+              <${Row} label=""><button onClick=${() => window.cutlineDesktop.backupFolder()}>Open the backups folder</button><//>`}
             <${Row} label="When Cutline opens">
               <${Select} k="startScreen" options=${[["home", "Show recent projects"], ["last", "Open the last project"]]} /><//>`}
           ${sec === "export" && html`
