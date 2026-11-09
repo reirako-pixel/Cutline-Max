@@ -18,6 +18,12 @@ export const VIZ_STYLES = [
   ["sparkle", "Sparkle beam", "minus", [1700, 420], { count: 320, thick: 0.4 }],
   ["hud", "Tech circle", "radar", [660, 660], { count: 120, thick: 0.35, radius: 0.8 }],
   ["led", "LED blocks", "chart-no-axes-column", [1100, 420], { count: 24, thick: 0.7, reflect: true }],
+  ["neonbars", "Neon bars", "chart-column", [1200, 380], { count: 32, thick: 0.55 }],
+  ["neonwave", "Neon tube", "activity", [1400, 380], { thick: 0.4 }],
+  ["neoncircle", "Neon circle", "circle", [640, 640], { count: 64, thick: 0.45, radius: 0.55 }],
+  ["neonpulse", "Neon pulse", "radio", [700, 700], { count: 5, thick: 0.45, radius: 0.3 }],
+  ["player", "Music player", "music-4", [1300, 340], { count: 28, thick: 0.55, theme: "dark", title: "Song title", artist: "Artist" }],
+  ["vinyl", "Vinyl record", "disc-3", [820, 820], { count: 90, thick: 0.4, radius: 0.36, rpm: 33, deck: true, title: "Song title" }],
 ];
 
 /** Ready-made looks for the library: [name, style, colour A, colour B, extra settings]. */
@@ -53,6 +59,23 @@ export const VIZ_PRESETS = [
   ["Party LED", "led", "#2bff88", "#ff3b3b", { glow: 0.45, rainbow: true }],
   ["Classic LED", "led", "#2bff88", "#ff3b3b", { glow: 0.35 }],
   ["Thin glow ring", "ring", "#ff6a1a", "#b02bff", { glow: 0.7, thick: 0.06, sens: 0.6, radius: 0.82, count: 96 }],
+  ["Neon pink bars", "neonbars", "#ff2bd6", "#ff2bd6", { glow: 0.85 }],
+  ["Neon blue bars", "neonbars", "#00c8ff", "#00c8ff", { glow: 0.85 }],
+  ["Neon green bars", "neonbars", "#39ff14", "#39ff14", { glow: 0.85, mirror: true }],
+  ["Neon red bars", "neonbars", "#ff2d55", "#ff2d55", { glow: 0.85, count: 48, thick: 0.45 }],
+  ["Neon purple tube", "neonwave", "#a640ff", "#ff2bd6", { glow: 0.9 }],
+  ["Neon cyan tube", "neonwave", "#00e5ff", "#00e5ff", { glow: 0.9 }],
+  ["Neon yellow tube", "neonwave", "#ffe14d", "#ff7a00", { glow: 0.85 }],
+  ["Neon pink circle", "neoncircle", "#ff2bd6", "#ff2bd6", { glow: 0.85 }],
+  ["Neon cyan circle", "neoncircle", "#00f0ff", "#00f0ff", { glow: 0.85, spin: 10 }],
+  ["Neon green pulse", "neonpulse", "#39ff14", "#00f0ff", { glow: 0.85 }],
+  ["Neon orange pulse", "neonpulse", "#ff7a00", "#ffd23f", { glow: 0.85 }],
+  ["Music player", "player", "#ff3cac", "#7b5cff", { glow: 0.15 }],
+  ["Light player", "player", "#3d8bff", "#00e5ff", { glow: 0.1, theme: "light" }],
+  ["Glass player", "player", "#ffd23f", "#ff6a1a", { glow: 0.15, theme: "glass" }],
+  ["Vinyl turntable", "vinyl", "#ff3cac", "#7b5cff", { glow: 0.2 }],
+  ["Spinning vinyl", "vinyl", "#ffd23f", "#ff6a1a", { glow: 0.45, deck: false }],
+  ["Neon vinyl", "vinyl", "#00f0ff", "#ff2bd6", { glow: 0.75, deck: false, ring: true }],
 ];
 
 export const vizStyleName = (id) => VIZ_STYLES.find((s) => s[0] === id)?.[1] || "Visualizer";
@@ -456,6 +479,201 @@ function mix(a, b, f) {
 }
 
 /** Draws visualizer settings `v` at time t; k = canvas width / 1920. */
+// ---------- neon solids, music player and vinyl ----------
+
+const neonStroke = (c, col, width, k, core = true) => {
+  c.save(); c.shadowColor = col; c.shadowBlur = 22 * k; c.strokeStyle = col; c.lineWidth = width; c.stroke(); c.restore();
+  if (core) { c.save(); c.strokeStyle = "rgba(255,255,255,0.85)"; c.lineWidth = Math.max(1, width * 0.35); c.stroke(); c.restore(); }
+};
+const barCol = (v, i, n) => (v.rainbow ? `hsl(${Math.round((i / n) * 300)} 100% 60%)` : i % 2 && v.colorB !== v.colorA ? v.colorB : v.colorA);
+/** Song position for player / vinyl: 0–1 and seconds, from the layer's own time on the timeline. */
+function trackPos(v, t) {
+  const dur = v._dur || 30, el = v._start != null ? Math.max(0, Math.min(dur, t - v._start)) : t % dur;
+  return { p: el / dur, el, dur };
+}
+const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+function rrect(c, x, y, w, h, r) { r = Math.min(r, w / 2, h / 2); c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
+
+Object.assign(DRAW, {
+  /** Solid neon bars: one bright colour, rounded, with a white-hot core. */
+  neonbars(c, v, t, w, h, k) {
+    const n = Math.max(4, Math.round(v.count)), vals = values(v, t, n, !!v.mirror);
+    const slot = w / n, bw = Math.max(2 * k, slot * (0.15 + 0.8 * v.thick));
+    for (let i = 0; i < n; i++) {
+      const bh = Math.max(bw, vals[i] * h * 0.95), x = -w / 2 + i * slot + (slot - bw) / 2, y = h / 2 - bh;
+      const col = barCol(v, i, n);
+      c.save(); c.shadowColor = col; c.shadowBlur = 20 * k; c.fillStyle = col; rrect(c, x, y, bw, bh, bw / 2); c.fill(); c.restore();
+      c.fillStyle = "rgba(255,255,255,0.75)"; rrect(c, x + bw * 0.3, y + bw * 0.25, bw * 0.4, Math.max(0, bh - bw * 0.5), bw * 0.2); c.fill();
+    }
+  },
+  /** A glowing neon tube that ripples with the sound. */
+  neonwave(c, v, t, w, h, k) {
+    const n = 160, wave = waveAt(t, n), lv = levelAt(t) * v.sens;
+    const line = (amp, phase, col, width) => {
+      c.beginPath();
+      for (let i = 0; i < n; i++) {
+        const x = -w / 2 + (i / (n - 1)) * w, env = Math.sin((i / (n - 1)) * Math.PI);
+        const y = (wave[(i + phase) % n] * v.sens * 0.9 + 0.08 * Math.sin(i * 0.12 + t * 3)) * (h / 2) * amp * env;
+        i ? c.lineTo(x, y) : c.moveTo(x, y);
+      }
+      neonStroke(c, col, width, k);
+    };
+    const lw = (3 + v.thick * 12) * k;
+    if (v.colorB !== v.colorA || v.rainbow) { c.globalAlpha = 0.7; line(0.7, 40, v.rainbow ? `hsl(${(t * 60) % 360} 100% 60%)` : v.colorB, lw * 0.7); c.globalAlpha = 1; }
+    line(1, 0, v.colorA, lw * (1 + 0.3 * lv));
+  },
+  /** A neon ring that swells on the beat, with solid neon spokes outside it. */
+  neoncircle(c, v, t, w, h, k) {
+    const R = Math.min(w, h) / 2, beat = beatAt(t) * v.sens, r0 = R * Math.max(0.2, Math.min(0.85, v.radius)) * (1 + 0.06 * Math.min(1, beat));
+    const n = Math.max(12, Math.round(v.count)), vals = values(v, t, n, true), rot = rot0(v, t);
+    c.lineCap = "round";
+    for (let i = 0; i < n; i++) {
+      const a = rot + (i / n) * Math.PI * 2, len = (0.06 + 0.94 * vals[i]) * (R - r0) * 0.9;
+      c.beginPath(); c.moveTo(Math.cos(a) * r0 * 1.12, Math.sin(a) * r0 * 1.12); c.lineTo(Math.cos(a) * (r0 * 1.12 + len), Math.sin(a) * (r0 * 1.12 + len));
+      neonStroke(c, v.rainbow ? `hsl(${Math.round((i / n) * 360)} 100% 60%)` : v.colorB, Math.max(2 * k, ((2 * Math.PI * r0) / n) * (0.2 + 0.5 * v.thick)), k, false);
+    }
+    c.beginPath(); c.arc(0, 0, r0, 0, Math.PI * 2);
+    neonStroke(c, v.colorA, (4 + v.thick * 12) * k);
+  },
+  /** Neon rings rippling out from the middle; a bright core flashes on the beat. */
+  neonpulse(c, v, t, w, h, k) {
+    const R = Math.min(w, h) / 2, lv = levelAt(t) * v.sens, beat = beatAt(t) * v.sens, n = Math.max(2, Math.round(v.count));
+    for (let i = 0; i < n; i++) {
+      const ph = (t * 0.45 + i / n) % 1, r = R * (Math.max(0.1, v.radius) * 0.6 + ph * (1 - Math.max(0.1, v.radius) * 0.6));
+      c.globalAlpha = (1 - ph) * (0.4 + 0.6 * lv);
+      c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2);
+      neonStroke(c, i % 2 ? v.colorB : v.colorA, (2 + v.thick * 10) * k * (1 - ph * 0.5), k);
+    }
+    c.globalAlpha = 1;
+    const cr = R * Math.max(0.1, v.radius) * 0.55 * (1 + 0.25 * Math.min(1, beat));
+    const g = c.createRadialGradient(0, 0, 0, 0, 0, cr);
+    g.addColorStop(0, "#ffffff"); g.addColorStop(0.35, v.colorA); g.addColorStop(1, "rgba(0,0,0,0)");
+    c.save(); c.shadowColor = v.colorA; c.shadowBlur = 30 * k; c.fillStyle = g; c.beginPath(); c.arc(0, 0, cr, 0, Math.PI * 2); c.fill(); c.restore();
+    c.beginPath(); c.arc(0, 0, cr * 0.95, 0, Math.PI * 2); neonStroke(c, v.colorA, (3 + v.thick * 8) * k, k);
+  },
+  /** A "now playing" card: cover, title, artist, a moving progress bar with times, controls and a little spectrum. */
+  player(c, v, t, w, h, k) {
+    const theme = v.theme || "dark", light = theme === "light", glass = theme === "glass";
+    const fg = light ? "#15151c" : "#ffffff", muted = light ? "rgba(20,20,30,0.55)" : "rgba(255,255,255,0.6)", track = light ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.18)";
+    const { p, el, dur } = trackPos(v, t), beat = beatAt(t) * v.sens, pad = h * 0.11;
+    // card
+    c.save(); c.shadowColor = "rgba(0,0,0,0.45)"; c.shadowBlur = 30 * k; c.shadowOffsetY = 10 * k;
+    rrect(c, -w / 2, -h / 2, w, h, h * 0.16);
+    c.fillStyle = light ? "rgba(255,255,255,0.96)" : glass ? "rgba(255,255,255,0.14)" : "rgba(18,18,28,0.9)"; c.fill(); c.restore();
+    rrect(c, -w / 2, -h / 2, w, h, h * 0.16); c.lineWidth = Math.max(1, 1.5 * k); c.strokeStyle = light ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.22)"; c.stroke();
+    // cover: colour gradient with a spinning disc, pulsing on the beat
+    const cs = h - pad * 2, cx = -w / 2 + pad, cy = -h / 2 + pad;
+    c.save(); rrect(c, cx, cy, cs, cs, cs * 0.12); c.clip();
+    const g = c.createLinearGradient(cx, cy, cx + cs, cy + cs); g.addColorStop(0, v.colorA); g.addColorStop(1, v.colorB); c.fillStyle = g; c.fillRect(cx, cy, cs, cs);
+    c.translate(cx + cs / 2, cy + cs / 2); c.scale(1 + 0.05 * Math.min(1, beat), 1 + 0.05 * Math.min(1, beat));
+    c.rotate(t * 1.2);
+    c.fillStyle = "rgba(0,0,0,0.75)"; c.beginPath(); c.arc(0, 0, cs * 0.34, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = "rgba(255,255,255,0.12)"; c.lineWidth = Math.max(1, k);
+    for (let r = 0.14; r < 0.33; r += 0.04) { c.beginPath(); c.arc(0, 0, cs * r, 0, Math.PI * 2); c.stroke(); }
+    c.fillStyle = v.colorA; c.beginPath(); c.arc(0, 0, cs * 0.11, 0, Math.PI * 2); c.fill();
+    c.fillStyle = "#000"; c.beginPath(); c.arc(0, 0, cs * 0.025, 0, Math.PI * 2); c.fill();
+    c.restore();
+    // words
+    const x0 = cx + cs + pad, x1 = w / 2 - pad;
+    c.textBaseline = "alphabetic"; c.textAlign = "left";
+    c.fillStyle = fg; c.font = `700 ${h * 0.15}px Poppins, Inter, Arial, sans-serif`;
+    const fit = (txt, maxW) => { let s = txt || ""; while (s.length > 1 && c.measureText(s).width > maxW) s = s.slice(0, -1); return s.length < (txt || "").length ? s.slice(0, -1) + "…" : s; };
+    const specW = (x1 - x0) * 0.32;
+    c.fillText(fit(v.title || "Song title", x1 - x0 - specW - pad * 0.5), x0, cy + h * 0.15);
+    c.fillStyle = muted; c.font = `500 ${h * 0.1}px Poppins, Inter, Arial, sans-serif`;
+    c.fillText(fit(v.artist || "", x1 - x0 - specW - pad * 0.5), x0, cy + h * 0.28);
+    // spectrum, top right
+    const n = Math.max(6, Math.round(v.count)), vals = values(v, t, n, false), sw = specW / n, sh = h * 0.3;
+    for (let i = 0; i < n; i++) {
+      const bh = Math.max(2 * k, vals[i] * sh), bx = x1 - specW + i * sw + sw * 0.15;
+      c.fillStyle = barCol(v, i, n); rrect(c, bx, cy + sh - bh, sw * (0.3 + 0.6 * v.thick), bh, sw * 0.3); c.fill();
+    }
+    // progress bar and times
+    const by = cy + cs * 0.66, bh = Math.max(3 * k, h * 0.025);
+    rrect(c, x0, by - bh / 2, x1 - x0, bh, bh / 2); c.fillStyle = track; c.fill();
+    const pg = c.createLinearGradient(x0, 0, x1, 0); pg.addColorStop(0, v.colorA); pg.addColorStop(1, v.colorB);
+    rrect(c, x0, by - bh / 2, Math.max(bh, (x1 - x0) * p), bh, bh / 2); c.fillStyle = pg; c.fill();
+    c.save(); c.shadowColor = v.colorA; c.shadowBlur = 10 * k; c.fillStyle = light ? v.colorA : "#ffffff";
+    c.beginPath(); c.arc(x0 + (x1 - x0) * p, by, bh * 2.1, 0, Math.PI * 2); c.fill(); c.restore();
+    c.fillStyle = muted; c.font = `500 ${h * 0.075}px Poppins, Inter, Arial, sans-serif`;
+    c.fillText(mmss(el), x0, by + h * 0.12); c.textAlign = "right"; c.fillText("-" + mmss(Math.max(0, dur - el)), x1, by + h * 0.12);
+    // controls: back, pause, next
+    const my = by + h * 0.135, mx = (x0 + x1) / 2, u = h * 0.06;
+    c.fillStyle = fg;
+    const tri = (x, dir) => { c.beginPath(); c.moveTo(x, my - u); c.lineTo(x + dir * u * 1.2, my); c.lineTo(x, my + u); c.closePath(); c.fill(); };
+    tri(mx - u * 3.2, -1); tri(mx - u * 4.4, -1); c.fillRect(mx - u * 4.7, my - u, u * 0.3, u * 2);
+    tri(mx + u * 3.2, 1); tri(mx + u * 4.4, 1); c.fillRect(mx + u * 4.4, my - u, u * 0.3, u * 2);
+    c.save(); c.fillStyle = v.colorA; c.shadowColor = v.colorA; c.shadowBlur = 12 * k * (0.5 + Math.min(1, beat)); c.beginPath(); c.arc(mx, my, u * 1.7, 0, Math.PI * 2); c.fill(); c.restore();
+    c.fillStyle = "#ffffff"; c.fillRect(mx - u * 0.6, my - u * 0.75, u * 0.38, u * 1.5); c.fillRect(mx + u * 0.22, my - u * 0.75, u * 0.38, u * 1.5);
+  },
+  /** A spinning vinyl record (on a turntable, or on its own) that pulses with the music; the arm follows the song. */
+  vinyl(c, v, t, w, h, k) {
+    const R = Math.min(w, h) / 2, beat = Math.min(1, beatAt(t) * v.sens), lv = levelAt(t) * v.sens, deck = v.deck !== false;
+    const { p } = trackPos(v, t);
+    if (deck) { // turntable base
+      c.save(); c.shadowColor = "rgba(0,0,0,0.5)"; c.shadowBlur = 30 * k; c.shadowOffsetY = 12 * k;
+      rrect(c, -R, -R, R * 2, R * 2, R * 0.08);
+      const bg = c.createLinearGradient(-R, -R, R, R); bg.addColorStop(0, "#2b2d36"); bg.addColorStop(1, "#111218"); c.fillStyle = bg; c.fill(); c.restore();
+      rrect(c, -R, -R, R * 2, R * 2, R * 0.08); c.strokeStyle = "rgba(255,255,255,0.12)"; c.lineWidth = 2 * k; c.stroke();
+      c.fillStyle = v.colorA; c.beginPath(); c.arc(-R * 0.82, R * 0.82, R * 0.035, 0, Math.PI * 2); c.fill(); // power light
+    }
+    const rr = (deck ? R * 0.78 : R * 0.9) * (1 + 0.015 * beat), ox = deck ? -R * 0.08 : 0;
+    // sound ring around a loose record
+    if (!deck || v.ring) {
+      const n = Math.max(24, Math.round(v.count)), vals = values(v, t, n, true);
+      c.save(); c.translate(ox, 0); c.lineCap = "round";
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2 - Math.PI / 2, len = (0.04 + 0.96 * vals[i]) * rr * 0.16;
+        c.strokeStyle = barCol(v, i, n); c.lineWidth = Math.max(2 * k, ((2 * Math.PI * rr) / n) * 0.45);
+        c.beginPath(); c.moveTo(Math.cos(a) * rr * 1.03, Math.sin(a) * rr * 1.03); c.lineTo(Math.cos(a) * (rr * 1.03 + len), Math.sin(a) * (rr * 1.03 + len)); c.stroke();
+      }
+      c.restore();
+    }
+    c.save(); c.translate(ox, 0);
+    if (deck) { c.fillStyle = "#0a0a0d"; c.beginPath(); c.arc(0, 0, rr * 1.04, 0, Math.PI * 2); c.fill(); }
+    c.save(); c.shadowColor = v.colorA; c.shadowBlur = (8 + 30 * lv) * k;
+    const rg = c.createRadialGradient(0, 0, rr * 0.3, 0, 0, rr); rg.addColorStop(0, "#1c1c22"); rg.addColorStop(1, "#050507");
+    c.fillStyle = rg; c.beginPath(); c.arc(0, 0, rr, 0, Math.PI * 2); c.fill(); c.restore();
+    // grooves
+    c.lineWidth = Math.max(0.6, 0.8 * k);
+    for (let r = 0.4; r < 0.98; r += 0.025) { c.strokeStyle = `rgba(255,255,255,${0.035 + 0.03 * Math.sin(r * 90)})`; c.beginPath(); c.arc(0, 0, rr * r, 0, Math.PI * 2); c.stroke(); }
+    // light catching the grooves (stays still while the record turns)
+    if (c.createConicGradient) {
+      const sg = c.createConicGradient(-Math.PI / 4, 0, 0);
+      sg.addColorStop(0, "rgba(255,255,255,0)"); sg.addColorStop(0.08, "rgba(255,255,255,0.16)"); sg.addColorStop(0.16, "rgba(255,255,255,0)");
+      sg.addColorStop(0.5, "rgba(255,255,255,0)"); sg.addColorStop(0.58, "rgba(255,255,255,0.12)"); sg.addColorStop(0.66, "rgba(255,255,255,0)"); sg.addColorStop(1, "rgba(255,255,255,0)");
+      c.fillStyle = sg; c.beginPath(); c.arc(0, 0, rr * 0.98, 0, Math.PI * 2); c.arc(0, 0, rr * 0.38, 0, Math.PI * 2, true); c.fill();
+    }
+    // label (turns with the record)
+    c.rotate((t * (v.rpm || 33) * 6 * Math.PI) / 180);
+    const lr = rr * Math.max(0.2, Math.min(0.5, v.radius || 0.36));
+    const lg = c.createLinearGradient(-lr, -lr, lr, lr); lg.addColorStop(0, v.colorA); lg.addColorStop(1, v.colorB);
+    c.fillStyle = lg; c.beginPath(); c.arc(0, 0, lr, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = "rgba(255,255,255,0.35)"; c.lineWidth = Math.max(1, k); c.beginPath(); c.arc(0, 0, lr * 0.82, 0, Math.PI * 2); c.stroke();
+    c.fillStyle = "#ffffff"; c.textAlign = "center"; c.textBaseline = "middle";
+    c.font = `700 ${lr * 0.2}px Poppins, Inter, Arial, sans-serif`;
+    let title = v.title || ""; while (title.length > 1 && c.measureText(title).width > lr * 1.5) title = title.slice(0, -1);
+    c.fillText(title, 0, -lr * 0.42);
+    c.font = `500 ${lr * 0.13}px Poppins, Inter, Arial, sans-serif`; c.fillText(`${v.rpm || 33} RPM`, 0, lr * 0.45);
+    c.fillStyle = "#050507"; c.beginPath(); c.arc(0, 0, lr * 0.09, 0, Math.PI * 2); c.fill();
+    c.restore();
+    if (deck) { // tone arm: from its rest at the edge in toward the label as the song plays
+      const px = R * 0.72, py = -R * 0.72, L = R * 1.18;
+      // Needle on the grooves: from the outer edge at the start of the song to near the label at its end.
+      const rt = rr * (0.93 - 0.5 * p), dx = ox - px, dy = -py, d = Math.hypot(dx, dy);
+      const cosT = Math.max(-1, Math.min(1, (L * L + d * d - rt * rt) / (2 * L * d)));
+      const a = Math.atan2(dy, dx) - Math.acos(cosT) + 0.01 * Math.sin(t * 7) * beat;
+      c.save(); c.translate(px, py);
+      c.fillStyle = "#3a3d48"; c.beginPath(); c.arc(0, 0, R * 0.09, 0, Math.PI * 2); c.fill();
+      c.fillStyle = "#9aa0aa"; c.beginPath(); c.arc(0, 0, R * 0.05, 0, Math.PI * 2); c.fill();
+      c.rotate(a);
+      c.strokeStyle = "#c9ced6"; c.lineCap = "round"; c.lineWidth = R * 0.03; c.beginPath(); c.moveTo(0, 0); c.lineTo(L * 0.95, 0); c.stroke();
+      c.fillStyle = "#2b2d36"; c.save(); c.translate(L * 0.98, 0); c.rotate(0.35); c.fillRect(-R * 0.05, -R * 0.04, R * 0.14, R * 0.08); c.fillStyle = v.colorA; c.fillRect(R * 0.06, -R * 0.02, R * 0.03, R * 0.04); c.restore();
+      c.restore();
+    }
+  },
+});
+
 export function drawVizStyle(c, v, t, k) {
   const w = v.w * k, h = v.h * k;
   (DRAW[v.style] || DRAW.bars)(c, v, t, w, h, k);

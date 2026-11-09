@@ -61,6 +61,58 @@ export const STICKER_SHAPES = [["burst", "Burst"], ["bubble", "Speech bubble"], 
   ["tag", "Price tag"], ["ribbon", "Ribbon"], ["live", "Live badge"], ["none", "Just the words"]];
 export const STICKER_FONTS = { comic: ["'Bangers', 'Arial Black', cursive", 400], round: ["'Poppins', 'Arial Black', sans-serif", 900] };
 
+import { drawFace, sceneBack, sceneFront, drawElegant, elegantSize } from "./stickerart.js";
+
+/** Premium faces for the Emoji tab: [shape, mood, palette, animation]. */
+export const PREMIUM_FACES = [
+  ["heart", "smile", "rose", "heartbeat"], ["heart", "love", "red", "heartbeat"], ["heart", "laugh", "rose", "shake"], ["heart", "wink", "pink", "wobble"],
+  ["heart", "kiss", "red", "pop"], ["heart", "blush", "pink", "float"], ["heart", "cool", "red", "swing"], ["heart", "starry", "rose", "tada"],
+  ["heart", "wow", "pink", "pop"], ["heart", "cry", "lilac", "float"], ["heart", "sleepy", "lilac", "float"], ["heart", "angry", "red", "shake"],
+  ["heart", "cute", "peach", "jelly"], ["heart", "sad", "sky", "float"], ["heart", "love", "gold", "heartbeat"], ["heart", "smile", "mint", "bounce"],
+  ["round", "smile", "sun", "bounce"], ["round", "love", "sun", "heartbeat"], ["round", "laugh", "sun", "shake"], ["round", "blush", "peach", "float"],
+  ["round", "cool", "gold", "swing"], ["round", "cute", "pink", "jelly"], ["round", "sleepy", "sky", "float"], ["round", "wow", "sun", "pop"],
+  ["star", "starry", "gold", "spin"], ["star", "smile", "sun", "tada"], ["star", "wink", "gold", "wobble"], ["star", "love", "pink", "pop"],
+  ["cloud", "sleepy", "sky", "float"], ["cloud", "cute", "pink", "float"], ["cloud", "cry", "sky", "float"], ["cloud", "smile", "mint", "float"],
+];
+
+/** Animated elements (Elements tab): category → [emoji, animation, scene effect, glow colour]. */
+export const ANIMATED_ELEMENTS = {
+  emotions: [["😍", "heartbeat", "hearts", "#ff3c6e"], ["😂", "shake", "tears", "#ffd23f"], ["🥳", "tada", "confetti", "#b46bff"], ["😴", "float", "zzz", "#3d5bff"],
+    ["😡", "shake", "anger", "#ff2d2d"], ["🥰", "float", "hearts", "#ff9ccb"], ["🤩", "pop", "sparkle", "#ffd23f"], ["😭", "shake", "tears", "#3d8bff"],
+    ["😎", "swing", "shine", "#00e5ff"], ["🤗", "jelly", "sparkle", "#ff8a1f"], ["😘", "pop", "hearts", "#ff3c8e"], ["🤯", "pop", "confetti", "#ff5a1a"]],
+  animals: [["🐱", "bounce", "hearts", "#ff9ccb"], ["🐶", "wobble", "sparkle", "#ffb07a"], ["🐰", "bounce", "dust", "#ffd6e7"], ["🐼", "jelly", "petals", "#7ff0c4"],
+    ["🦋", "float", "sparkle", "#b46bff"], ["🐠", "float", "bubbles", "#3df2ff"], ["🐥", "bounce", "hearts", "#ffd23f"], ["🦄", "float", "sparkle", "#ff71ce"],
+    ["🐸", "bounce", "bubbles", "#39d353"], ["🐧", "wobble", "snow", "#7cc8ff"], ["🐝", "float", "petals", "#ffcc33"], ["🦊", "swing", "sparkle", "#ff8a1f"]],
+  weather: [["☀️", "spin", "rays", "#ffcc33"], ["🌧️", "float", "rain", "#3d8bff"], ["❄️", "spin", "snow", "#9fdcff"], ["⛈️", "shake", "lightning", "#6a5cff"],
+    ["🌈", "float", "sparkle", "#ff71ce"], ["🌙", "swing", "sparkle", "#b46bff"], ["⛅", "float", "rays", "#ffd23f"], ["🌪️", "spin", "dust", "#9aa0a6"],
+    ["🌸", "spin", "petals", "#ff9ccb"], ["⚡", "shake", "lightning", "#ffe14d"], ["☃️", "wobble", "snow", "#7cc8ff"], ["🔥", "wobble", "flame", "#ff5a1a"]],
+  drinks: [["☕", "float", "steam", "#c27a3a"], ["🧋", "wobble", "bubbles", "#e0a96d"], ["🥤", "bounce", "fizz", "#ff3c6e"], ["🍹", "swing", "sparkle", "#ff8a1f"],
+    ["🍵", "float", "steam", "#7fb685"], ["🥂", "swing", "fizz", "#ffd23f"], ["🍺", "wobble", "fizz", "#ffcc33"], ["🧃", "bounce", "sparkle", "#9dff3d"],
+    ["🍷", "swing", "shine", "#a8002a"], ["🥛", "float", "sparkle", "#ffffff"], ["🍸", "swing", "fizz", "#3df2ff"], ["🧉", "wobble", "steam", "#7fb685"]],
+  vehicles: [["🚗", "bounce", "speed", "#ff3c6e"], ["🚀", "shake", "flame", "#b46bff"], ["✈️", "float", "speed", "#3d8bff"], ["🚲", "bounce", "speed", "#39d353"],
+    ["🏍️", "shake", "speed", "#ff8a1f"], ["🚌", "bounce", "dust", "#ffd23f"], ["🚂", "bounce", "steam", "#9aa0a6"], ["🚁", "float", "speed", "#3df2ff"],
+    ["🛵", "bounce", "dust", "#ff71ce"], ["🚤", "float", "bubbles", "#3d8bff"], ["🛸", "float", "sparkle", "#9dff3d"], ["🏎️", "shake", "speed", "#ff2d2d"]],
+  furniture: [["🛋️", "jelly", "sparkle", "#c39bff"], ["🛏️", "float", "zzz", "#7cc8ff"], ["🪑", "wobble", "dust", "#c27a3a"], ["🕯️", "float", "flame", "#ffcc33"],
+    ["💡", "pop", "rays", "#ffe14d"], ["🪴", "swing", "petals", "#7fb685"], ["🚪", "swing", "shine", "#c27a3a"], ["🛁", "float", "bubbles", "#7cc8ff"],
+    ["🖼️", "swing", "shine", "#ffd23f"], ["🧸", "jelly", "hearts", "#ffb07a"], ["⏰", "shake", "sparkle", "#ff3c6e"], ["📺", "wobble", "sparkle", "#3df2ff"]],
+  clothing: [["👗", "swing", "sparkle", "#ff71ce"], ["👟", "bounce", "dust", "#3df2ff"], ["👑", "float", "shine", "#ffd23f"], ["🧢", "wobble", "sparkle", "#3d8bff"],
+    ["👠", "swing", "sparkle", "#ff2d55"], ["👕", "jelly", "sparkle", "#39d353"], ["🕶️", "swing", "shine", "#00e5ff"], ["🎀", "wobble", "hearts", "#ff9ccb"],
+    ["👜", "swing", "shine", "#c27a3a"], ["🧣", "wobble", "snow", "#ff3c6e"], ["💍", "spin", "shine", "#dfe8ff"], ["🎩", "tada", "sparkle", "#b46bff"]],
+  people: [["💃", "swing", "notes", "#ff3c6e"], ["🕺", "bounce", "notes", "#b46bff"], ["👋", "swing", "sparkle", "#ffd23f"], ["🙋", "bounce", "sparkle", "#ff8a1f"],
+    ["🧑‍🎤", "shake", "notes", "#ff71ce"], ["👩‍🍳", "wobble", "steam", "#ffffff"], ["🧑‍💻", "float", "sparkle", "#3df2ff"], ["👰", "float", "petals", "#ffd6e7"],
+    ["🤳", "pop", "shine", "#3d8bff"], ["🏃", "bounce", "speed", "#39d353"], ["🧘", "float", "sparkle", "#7ff0c4"], ["👨‍👩‍👧", "jelly", "hearts", "#ff9ccb"]],
+};
+export const ELEMENT_CATEGORIES = [["emotions", "Emotions"], ["animals", "Cute animals"], ["weather", "Weather"], ["drinks", "Drinks"], ["vehicles", "Vehicles"],
+  ["furniture", "Household & furniture"], ["clothing", "Clothing"], ["people", "People"]];
+
+/** Elegant word stickers: [words, palette, effect, font]. */
+export const ELEGANT_STICKERS = [
+  ["Thank You", "gold", "write", "vibes"], ["Happy Birthday", "rose", "glitter", "vibes"], ["Congratulations", "gold", "glitter", "vibes"], ["Love", "ruby", "glow", "vibes"],
+  ["Welcome", "silver", "write", "vibes"], ["Best Wishes", "champagne", "glow", "vibes"], ["Just Married", "pearl", "write", "vibes"], ["Merry Christmas", "ruby", "glitter", "vibes"],
+  ["Happy Anniversary", "rose", "write", "vibes"], ["Forever", "lilac", "glow", "vibes"], ["With Love", "pink", "write", "dancing"], ["Salamat Po", "gold", "write", "vibes"],
+  ["Happy New Year", "gold", "glitter", "playfair"], ["Good Morning", "champagne", "write", "dancing"], ["Sweet Dreams", "lilac", "glow", "vibes"], ["Celebrate", "emerald", "glitter", "playfair"],
+];
+
 const EMOJI_FONT = `"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", "Twemoji Mozilla", sans-serif`;
 let measureCv = null;
 const mctx = () => (measureCv ??= new OffscreenCanvas(4, 4)).getContext("2d");
@@ -68,7 +120,8 @@ const mctx = () => (measureCv ??= new OffscreenCanvas(4, 4)).getContext("2d");
 /** Size of a sticker in pixels on a 1920-wide frame, before scaling: { w, h, fs (font size) }. */
 export function stickerSize(s) {
   const base = s.size ?? 220;
-  if (s.kind === "emoji") return { w: base * 1.1, h: base * 1.1, fs: base * 0.82 };
+  if (s.kind === "emoji" || s.kind === "face") return { w: base * 1.1, h: base * 1.1, fs: base * 0.82 };
+  if (s.shape === "elegant") return elegantSize(s, mctx());
   const fs = base * 0.42;
   const c = mctx();
   const [font, weight] = STICKER_FONTS[s.font] || STICKER_FONTS.comic;
@@ -117,13 +170,21 @@ export function drawStickerAt(c, s, t, dur, k) {
   c.rotate((m.rot * Math.PI) / 180);
   c.translate(0, -m.pivot * H);
   c.scale(m.sx, m.sy);
-  if (s.kind === "emoji") {
+  if (s.kind === "face") {
+    drawFace(c, s, W * 0.46, t * (s.speed ?? 1), k);
+    if (s.sparkles) sparkles(c, W, t * (s.speed ?? 1));
+  } else if (s.kind === "emoji") {
+    const ts = t * (s.speed ?? 1);
+    if (s.scene || s.glow) sceneBack(c, s, W / 2, ts);
     c.font = `${z.fs * k}px ${EMOJI_FONT}`;
     c.textAlign = "center"; c.textBaseline = "middle";
     if (s.shadow !== false) { c.shadowColor = "rgba(0,0,0,0.35)"; c.shadowBlur = 14 * k; c.shadowOffsetY = 6 * k; }
     c.fillText(s.emoji || "😀", 0, z.fs * k * 0.06);
-    c.shadowColor = "transparent";
-    if (s.sparkles) sparkles(c, W, t * (s.speed ?? 1));
+    c.shadowColor = "transparent"; c.shadowBlur = 0; c.shadowOffsetY = 0;
+    if (s.scene) sceneFront(c, s, W / 2, ts);
+    if (s.sparkles) sparkles(c, W, ts);
+  } else if (s.shape === "elegant") {
+    drawElegant(c, s, z, k, t);
   } else {
     drawBadge(c, s, z, k, t);
     if (s.sparkles) sparkles(c, W * 1.05, t * (s.speed ?? 1));
@@ -231,4 +292,8 @@ export function newTextSticker(def) {
   const [text, shape, fill, color, outline, font, anim] = def;
   return { kind: "text", text: text === "Plain bold" ? "AWESOME" : text, shape, fill, color, outline, font, anim, speed: 1, size: 300, popIn: true };
 }
-export const stickerName = (s) => (s.kind === "emoji" ? `${s.emoji} sticker` : `“${(s.text || "").replace(/\n/g, " ")}” sticker`);
+export const stickerName = (s) => (s.kind === "emoji" ? `${s.emoji} sticker` : s.kind === "face" ? "Premium face" : `“${(s.text || "").replace(/\n/g, " ")}” sticker`);
+
+export const newFaceSticker = ([shape, mood, palette, anim]) => ({ kind: "face", shape, mood, palette, anim, speed: 1, size: 260, popIn: true });
+export const newSceneSticker = ([emoji, anim, scene, glow]) => ({ kind: "emoji", emoji, anim, scene, glow, speed: 1, size: 280, popIn: true });
+export const newElegantSticker = ([text, palette, effect, font]) => ({ kind: "text", shape: "elegant", text, palette, effect, font, anim: "none", speed: 1, size: 300, popIn: false, writeDur: 1.8 });

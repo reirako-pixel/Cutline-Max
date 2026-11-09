@@ -10,15 +10,20 @@ import { html, Icon, Field, Section, Slider } from "./kit.js";
 import { setting } from "../settings.js";
 
 const pct = (v) => `${Math.round(v * 100)}%`;
-const BOTTOM_STYLES = new Set(["bars", "dots", "hills", "led"]);
-const ROUND_STYLES = new Set(["circle", "ring", "halo", "flame", "badge", "hud"]);
-const BAR_STYLES = new Set(["bars", "mirror", "dots", "led"]);
-const LINE_STYLES = new Set(["wave", "hills", "sparkle"]);
+const BOTTOM_STYLES = new Set(["bars", "dots", "hills", "led", "neonbars"]);
+const ROUND_STYLES = new Set(["circle", "ring", "halo", "flame", "badge", "hud", "neoncircle", "neonpulse"]);
+const BAR_STYLES = new Set(["bars", "mirror", "dots", "led", "neonbars"]);
+const LINE_STYLES = new Set(["wave", "hills", "sparkle", "neonwave"]);
+const NEON_STYLES = new Set(["neonbars", "neonwave", "neoncircle", "neonpulse"]);
+const PLAYER_STYLES = new Set(["player", "vinyl"]);
 
 /**
  * Adds a visualizer at the playhead. It lasts as long as the music under the playhead (or to the end of
  * the project), and is selected so its settings open on the right.
  */
+/** A song's name for the player / vinyl: the file name without its extension. */
+const songTitle = (project, song) => (project.media[song.mediaId]?.name || "Song title").replace(/\.[a-z0-9]{2,4}$/i, "").replace(/[_]+/g, " ");
+
 export function addVisualizer([name, style, colorA, colorB, extra]) {
   const { project, time } = getState();
   const song = (project.audio || []).find((a) => time >= a.start - 1e-3 && time < a.start + a.dur);
@@ -28,7 +33,7 @@ export function addVisualizer([name, style, colorA, colorB, extra]) {
   const id = uid();
   edit((p) => p.texts.push({
     id, start, dur, text: "", vizName: name, x: 0.5, y: BOTTOM_STYLES.has(style) ? 0.78 : 0.5, scale: 1, rotation: 0, opacity: 1,
-    viz: newViz(style, colorA, colorB, extra),
+    viz: newViz(style, colorA, colorB, { ...extra, ...(PLAYER_STYLES.has(style) && song ? { title: songTitle(project, song) } : {}) }),
     style: defaultTextStyle(),
     anim: { in: { type: "none", dur: 0.4 }, out: { type: "none", dur: 0.4 } },
   }));
@@ -72,7 +77,7 @@ const presetViz = new Map(VIZ_PRESETS.map((p) => [p[0], newViz(p[1], p[2], p[3],
 export function VisualizerTab({ part }) {
   const hasSound = useStore((s) => (s.project.audio || []).length > 0 || s.project.main.some((m) => s.project.media[m.mediaId]?.kind === "video"));
   const list = part === "all" ? VIZ_PRESETS : VIZ_PRESETS.filter((p) => (part === "round" ? ROUND_STYLES.has(p[1]) : part === "lines" ? LINE_STYLES.has(p[1])
-    : part === "bars" ? BAR_STYLES.has(p[1]) : p[1] === "stardust"));
+    : part === "bars" ? BAR_STYLES.has(p[1]) : part === "neon" ? NEON_STYLES.has(p[1]) : part === "player" ? PLAYER_STYLES.has(p[1]) : p[1] === "stardust"));
   return html`<div>
     <p class="muted small">Click a visualizer to add it at the playhead. It moves with the music and every other sound in your project, and lasts as long as the song under the playhead.</p>
     ${!hasSound && html`<p class="warn small">Add music or a video with sound first, or the visualizer stays still.</p>`}
@@ -94,12 +99,12 @@ export function VizFields({ t }) {
   const style = (id) => edit((p) => {
     const x = findItem(p, "text", t.id);
     if (!x) return;
-    const keep = { glow: x.viz.glow, sens: x.viz.sens, smooth: x.viz.smooth, spin: x.viz.spin };
+    const keep = { glow: x.viz.glow, sens: x.viz.sens, smooth: x.viz.smooth, spin: x.viz.spin, ...(x.viz.title ? { title: x.viz.title } : {}), ...(x.viz.artist ? { artist: x.viz.artist } : {}) };
     x.viz = newViz(id, x.viz.colorA, x.viz.colorB, keep);
     delete x.vizName;
   });
   const hasSound = useStore((s) => (s.project.audio || []).length > 0 || s.project.main.some((m) => s.project.media[m.mediaId]?.kind === "video"));
-  const counted = v.style !== "wave";
+  const counted = v.style !== "wave" && v.style !== "neonwave";
   return html`<div>
     ${!hasSound && html`<p class="warn small">There's no sound in the project yet, so the visualizer stays still. Add music or a video with sound.</p>`}
     <${Section} title="Style">
@@ -108,6 +113,25 @@ export function VizFields({ t }) {
           <${Icon} n=${icon} /> ${name}</button>`)}
       </div>
     <//>
+    ${PLAYER_STYLES.has(v.style) && html`<${Section} title=${v.style === "player" ? "Song details" : "Record"}>
+      <${Field} label="Song title"><input value=${v.title || ""} onInput=${(e) => set((z) => (z.title = e.target.value), true)} /><//>
+      ${v.style === "player" && html`
+        <${Field} label="Artist"><input value=${v.artist || ""} onInput=${(e) => set((z) => (z.artist = e.target.value), true)} /><//>
+        <${Field} label="Look">
+          <select value=${v.theme || "dark"} onChange=${(e) => set((z) => (z.theme = e.target.value))}>
+            <option value="dark">Dark</option><option value="light">Light</option><option value="glass">Glass (see-through)</option>
+          </select>
+        <//>`}
+      ${v.style === "vinyl" && html`
+        <${Field} label="Speed">
+          <select value=${v.rpm || 33} onChange=${(e) => set((z) => (z.rpm = +e.target.value))}>
+            <option value="33">33 RPM</option><option value="45">45 RPM</option><option value="78">78 RPM</option>
+          </select>
+        <//>
+        <label class="check"><input type="checkbox" checked=${v.deck !== false} onChange=${(e) => set((z) => (z.deck = e.target.checked))} /> On a turntable (the arm follows the song)</label>
+        <label class="check"><input type="checkbox" checked=${!!v.ring || v.deck === false} disabled=${v.deck === false} onChange=${(e) => set((z) => (z.ring = e.target.checked))} /> Sound ring around the record</label>`}
+      <p class="muted small">The progress ${v.style === "vinyl" ? "(the arm)" : "bar and times"} follow this layer's place on the timeline: use Match audio length so it lasts exactly as long as the song.</p>
+    <//>`}
     <${Section} title="Colours">
       <div class="grid2 viz-colors">
         <${Field} label="Colour 1"><input type="color" value=${v.colorA} onChange=${(e) => set((z) => (z.colorA = e.target.value))} /><//>
@@ -131,12 +155,12 @@ export function VizFields({ t }) {
         Bass in the middle (mirrored)</label>`}
     <//>
     <${Section} title="Shape">
-      ${counted && num("count", v.style === "stardust" || v.style === "sparkle" ? "Specks" : ["hills", "ring", "flame"].includes(v.style) ? "Points"
+      ${counted && num("count", v.style === "neonpulse" ? "Rings" : v.style === "vinyl" ? "Ring bars" : v.style === "stardust" || v.style === "sparkle" ? "Specks" : ["hills", "ring", "flame"].includes(v.style) ? "Points"
         : ["halo", "badge"].includes(v.style) ? "Spikes" : v.style === "hud" ? "Ticks" : "Bars", 8, v.style === "stardust" || v.style === "sparkle" ? 600 : 240, 1, (x) => String(Math.round(x)))}
-      ${num("thick", ["wave", "hills", "ring", "sparkle", "hud", "halo"].includes(v.style) ? "Line width" : v.style === "stardust" ? "Speck size" : v.style === "flame" || v.style === "badge" ? "Spike width" : "Bar width", 0, 1, 0.01, pct)}
-      ${ROUND_STYLES.has(v.style) && num("radius", v.style === "badge" ? "Badge size" : "Inner circle", 0.15, 0.9, 0.01, pct)}
+      ${v.style !== "vinyl" && num("thick", ["wave", "hills", "ring", "sparkle", "hud", "halo", "neonwave", "neonpulse"].includes(v.style) ? "Line width" : v.style === "stardust" ? "Speck size" : v.style === "flame" || v.style === "badge" ? "Spike width" : "Bar width", 0, 1, 0.01, pct)}
+      ${(ROUND_STYLES.has(v.style) || v.style === "vinyl") && num("radius", v.style === "badge" ? "Badge size" : v.style === "vinyl" ? "Label size" : v.style === "neonpulse" ? "Core size" : "Inner circle", 0.15, 0.9, 0.01, pct)}
       ${num("w", "Width", 80, 3840, 10, (x) => `${Math.round(x)} px`)}
-      ${!ROUND_STYLES.has(v.style) && num("h", "Height", 40, 2160, 10, (x) => `${Math.round(x)} px`)}
+      ${!ROUND_STYLES.has(v.style) && v.style !== "vinyl" && num("h", "Height", 40, 2160, 10, (x) => `${Math.round(x)} px`)}
     <//>
   </div>`;
 }

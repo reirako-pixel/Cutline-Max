@@ -30,6 +30,7 @@ export const FONTS = [
   { name: "Pacifico", css: "'Pacifico', cursive", web: "Pacifico" },
   { name: "Lobster", css: "'Lobster', cursive", web: "Lobster" },
   { name: "Dancing Script", css: "'Dancing Script', cursive", web: "Dancing+Script:wght@400..700" },
+  { name: "Great Vibes", css: "'Great Vibes', cursive", web: "Great+Vibes" },
   { name: "Caveat Brush", css: "'Caveat Brush', cursive", web: "Caveat+Brush" },
   { name: "Shadows Into Light", css: "'Shadows Into Light Two', cursive", web: "Shadows+Into+Light+Two" },
   { name: "Pixelify Sans", css: "'Pixelify Sans', sans-serif", web: "Pixelify+Sans:wght@400..700" },

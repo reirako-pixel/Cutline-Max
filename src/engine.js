@@ -678,7 +678,8 @@ function drawViz(ctx, item, a, tr, W, H) {
   L.translate(tr.x * W + a.dx * W, tr.y * H + a.dy * H);
   L.rotate((tr.rotation * Math.PI) / 180);
   L.scale(a.scale * tr.scale, a.scale * tr.scale);
-  drawVizStyle(L, v, frameTime, k);
+  // The player and vinyl show the song's progress from this layer's own place on the timeline.
+  drawVizStyle(L, v.style === "player" || v.style === "vinyl" ? { ...v, _start: item.start, _dur: item.dur } : v, frameTime, k);
   L.restore();
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);

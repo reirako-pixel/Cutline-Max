@@ -26,7 +26,7 @@ import { Timeline, dragGesture, setToggle } from "./ui/timeline.js";
 import { MaskHandles, CropBox } from "./ui/mask.js";
 import { ShapesTab } from "./ui/shapes.js";
 import { FramesTab } from "./ui/frames.js";
-import { StickersTab } from "./ui/stickers.js";
+import { StickersTab, AnimatedElementsTab } from "./ui/stickers.js";
 import { stickerName } from "./stickers.js";
 import { frameName } from "./frames.js";
 import { VisualizerTab } from "./ui/visualizer.js";
@@ -249,7 +249,8 @@ const LIB_TABS = [
 
 const SUB_NAV = {
   media: [["library", "Library"], ["kits", "My kits"]],
-  elements: [["mine", "My elements"]],
+  elements: [["emotions", "Emotions"], ["animals", "Cute animals"], ["weather", "Weather"], ["drinks", "Drinks"], ["vehicles", "Vehicles"],
+    ["furniture", "Household & furniture"], ["clothing", "Clothing"], ["people", "People"], ["mine", "My elements"]],
   shapes: [["basic", "Shapes"], ["arrows", "Arrows"]],
   stickers: [["emoji", "Emoji"], ["text", "Text stickers"]],
   frames: [["all", "All frames"], ["paper", "Paper"], ["elegant", "Elegant"], ["fun", "Fun & film"]],
@@ -260,7 +261,7 @@ const SUB_NAV = {
   captions: [["auto", "Auto captions"]],
   filters: [["all", "Filters"]],
   adjust: [["layer", "Adjustment layer"]],
-  visualizer: [["all", "All"], ["bars", "Bars"], ["lines", "Lines"], ["round", "Circles"], ["particles", "Particles"]],
+  visualizer: [["all", "All"], ["neon", "Neon glow"], ["player", "Players & vinyl"], ["bars", "Bars"], ["lines", "Lines"], ["round", "Circles"], ["particles", "Particles"]],
   titles: TITLE_CATEGORIES,
 };
 
@@ -307,7 +308,7 @@ function LeftPanel() {
       </div>
       <div class="libcontent">
         ${tab === "media" && (sub === "kits" ? html`<${MediaKitsTab} />` : html`<${MediaTab} />`)}
-        ${tab === "elements" && html`<${ElementsTab} />`}
+        ${tab === "elements" && (sub === "mine" ? html`<${ElementsTab} />` : html`<${AnimatedElementsTab} part=${sub} />`)}
         ${tab === "shapes" && html`<${ShapesTab} part=${sub} />`}
         ${tab === "frames" && html`<${FramesTab} part=${sub} />`}
         ${tab === "stickers" && html`<${StickersTab} part=${sub} />`}
