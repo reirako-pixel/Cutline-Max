@@ -62,6 +62,14 @@ export const STICKER_SHAPES = [["burst", "Burst"], ["bubble", "Speech bubble"], 
 export const STICKER_FONTS = { comic: ["'Bangers', 'Arial Black', cursive", 400], round: ["'Poppins', 'Arial Black', sans-serif", 900] };
 
 import { drawFace, sceneBack, sceneFront, drawElegant, elegantSize } from "./stickerart.js";
+import { drawSinger, drawPeek, drawPet, petState } from "./chibi.js";
+import { viz, levelAt, beatAt } from "./vizdata.js";
+
+/** Singing chibis: [character, shirt colour]. */
+export const SINGERS = [["cat", "#ff3c8e"], ["dog", "#3d8bff"], ["bunny", "#b46bff"], ["bear", "#ff8a1f"], ["panda", "#39d353"], ["chick", "#ff2d55"],
+  ["fox", "#00c48c"], ["hamster", "#ffd23f"], ["frog", "#7b5cff"], ["girl", "#ff71ce"], ["boy", "#3df2ff"]];
+export const PEEKERS = ["cat", "dog", "bunny", "bear", "panda", "chick", "fox", "hamster", "frog"];
+export const WALKERS = ["cat", "kitten", "tux", "dog", "corgi", "bunny", "chick"];
 
 /** Premium faces for the Emoji tab: [shape, mood, palette, animation]. */
 export const PREMIUM_FACES = [
@@ -102,8 +110,33 @@ export const ANIMATED_ELEMENTS = {
     ["🧑‍🎤", "shake", "notes", "#ff71ce"], ["👩‍🍳", "wobble", "steam", "#ffffff"], ["🧑‍💻", "float", "sparkle", "#3df2ff"], ["👰", "float", "petals", "#ffd6e7"],
     ["🤳", "pop", "shine", "#3d8bff"], ["🏃", "bounce", "speed", "#39d353"], ["🧘", "float", "sparkle", "#7ff0c4"], ["👨‍👩‍👧", "jelly", "hearts", "#ff9ccb"]],
 };
+Object.assign(ANIMATED_ELEMENTS, {
+  church: [["⛪", "float", "rays", "#ffd23f"], ["💒", "swing", "petals", "#ffb7d5"], ["🕯️", "float", "flame", "#ffcc33"], ["📖", "float", "shine", "#ffd23f"],
+    ["📿", "swing", "sparkle", "#c39bff"], ["🔔", "swing", "notes", "#ffd23f"], ["🙏", "float", "rays", "#ffe9a8"], ["🛐", "float", "sparkle", "#ffd23f"],
+    ["✝️", "float", "rays", "#ffd23f"], ["🕊️", "float", "sparkle", "#dfe8ff"], ["🎼", "float", "notes", "#7cc8ff"], ["🪔", "float", "flame", "#ff8a1f"]],
+  holy: [["😇", "float", "halo", "#ffe9a8"], ["👼", "float", "halo", "#ffd6e7"], ["🕊️", "float", "rays", "#dfe8ff"], ["✝️", "pop", "shine", "#ffd23f"],
+    ["🌟", "pop", "rays", "#ffe14d"], ["✨", "blink", "sparkle", "#ffffff"], ["💫", "spin", "sparkle", "#ffd23f"], ["🙏", "float", "halo", "#ffe9a8"],
+    ["☁️", "float", "rays", "#ffe9a8"], ["🕯️", "float", "halo", "#ffcc33"], ["🌅", "float", "rays", "#ff8a1f"], ["❤️‍🔥", "heartbeat", "flame", "#ff3c6e"]],
+  christmas: [["🎄", "wobble", "lights", "#39d353"], ["🎅", "bounce", "snow", "#ff2d2d"], ["🤶", "swing", "snow", "#ff2d2d"], ["⛄", "wobble", "snow", "#9fdcff"],
+    ["🎁", "jelly", "confetti", "#ff3c6e"], ["🔔", "swing", "sparkle", "#ffd23f"], ["🦌", "bounce", "snow", "#c27a3a"], ["🌟", "spin", "rays", "#ffe14d"],
+    ["🍪", "bounce", "sparkle", "#e0a96d"], ["🧦", "swing", "lights", "#ff2d2d"], ["❄️", "spin", "snow", "#dfe8ff"], ["🕯️", "float", "flame", "#ffcc33"]],
+  music: [["🎤", "swing", "notes", "#ff3cac"], ["🎸", "shake", "notes", "#ff8a1f"], ["🎹", "bounce", "notes", "#3df2ff"], ["🥁", "shake", "speed", "#ff2d2d"],
+    ["🎷", "swing", "notes", "#ffd23f"], ["🎺", "wobble", "notes", "#ffcc33"], ["🎻", "swing", "notes", "#c27a3a"], ["🎧", "bounce", "notes", "#b46bff"],
+    ["📻", "wobble", "notes", "#39d353"], ["🪗", "jelly", "notes", "#ff71ce"], ["🎼", "float", "notes", "#7cc8ff"], ["💿", "spin", "shine", "#dfe8ff"]],
+  gadgets: [["📱", "wobble", "shine", "#3d8bff"], ["💻", "float", "sparkle", "#3df2ff"], ["🎮", "shake", "speed", "#b46bff"], ["📷", "pop", "shine", "#ffd23f"],
+    ["⌚", "swing", "shine", "#dfe8ff"], ["🎧", "bounce", "notes", "#ff3cac"], ["🖥️", "float", "sparkle", "#3df2ff"], ["🕹️", "wobble", "sparkle", "#ff2d55"],
+    ["🔋", "pop", "lightning", "#39d353"], ["📡", "swing", "rays", "#9aa0a6"], ["🤖", "bounce", "sparkle", "#7cc8ff"], ["🎥", "wobble", "shine", "#ff8a1f"]],
+  leisure: [["🏖️", "float", "rays", "#ffd23f"], ["🎣", "swing", "bubbles", "#3d8bff"], ["🧘", "float", "sparkle", "#7ff0c4"], ["🎨", "wobble", "confetti", "#ff71ce"],
+    ["📚", "float", "sparkle", "#c27a3a"], ["🎬", "pop", "shine", "#ffd23f"], ["🏕️", "float", "flame", "#ff8a1f"], ["⛱️", "swing", "rays", "#ffcc33"],
+    ["🎳", "shake", "speed", "#ff2d55"], ["🎡", "spin", "lights", "#b46bff"], ["🛹", "bounce", "speed", "#3df2ff"], ["🏊", "float", "bubbles", "#3d8bff"]],
+  travel: [["✈️", "float", "speed", "#3d8bff"], ["🧳", "bounce", "sparkle", "#c27a3a"], ["🗺️", "float", "shine", "#ffd23f"], ["🏝️", "float", "rays", "#39d353"],
+    ["🗽", "float", "sparkle", "#7ff0c4"], ["🗼", "float", "lights", "#ff71ce"], ["🏯", "float", "petals", "#ff9ccb"], ["🚢", "float", "bubbles", "#3d8bff"],
+    ["🎫", "wobble", "shine", "#ffd23f"], ["📸", "pop", "shine", "#ff3c8e"], ["🏔️", "float", "snow", "#9fdcff"], ["🌍", "spin", "sparkle", "#3df2ff"]],
+});
+
 export const ELEMENT_CATEGORIES = [["emotions", "Emotions"], ["animals", "Cute animals"], ["weather", "Weather"], ["drinks", "Drinks"], ["vehicles", "Vehicles"],
-  ["furniture", "Household & furniture"], ["clothing", "Clothing"], ["people", "People"]];
+  ["furniture", "Household & furniture"], ["clothing", "Clothing"], ["people", "People"], ["church", "Church"], ["holy", "Holy"], ["christmas", "Christmas"],
+  ["music", "Music"], ["gadgets", "Gadgets"], ["leisure", "Leisure"], ["travel", "Travel"], ["singers", "Singing chibis"], ["peekers", "Peeking animals"], ["pets", "Walking pets"]];
 
 /** Elegant word stickers: [words, palette, effect, font]. */
 export const ELEGANT_STICKERS = [
@@ -121,6 +154,9 @@ const mctx = () => (measureCv ??= new OffscreenCanvas(4, 4)).getContext("2d");
 export function stickerSize(s) {
   const base = s.size ?? 220;
   if (s.kind === "emoji" || s.kind === "face") return { w: base * 1.1, h: base * 1.1, fs: base * 0.82 };
+  if (s.kind === "singer") return { w: base * 1.05, h: base * 1.3, fs: base };
+  if (s.kind === "peek") return { w: base * 1.1, h: base * 0.95, fs: base };
+  if (s.kind === "pet") return { w: base * 1.55, h: base * 1.1, fs: base };
   if (s.shape === "elegant") return elegantSize(s, mctx());
   const fs = base * 0.42;
   const c = mctx();
@@ -160,8 +196,9 @@ function motion(s, t, dur) {
 }
 
 /** Draws a sticker centred on the origin (the caller has placed, scaled and turned the layer). k = frame width / 1920. */
-export function drawStickerAt(c, s, t, dur, k) {
+export function drawStickerAt(c, s, t, dur, k, absT) {
   const z = stickerSize(s);
+  if (s.kind === "singer" || s.kind === "peek" || s.kind === "pet") return drawCharacter(c, s, z, t, k, absT);
   const m = motion(s, t, dur);
   const W = z.w * k, H = z.h * k;
   c.save();
@@ -292,8 +329,42 @@ export function newTextSticker(def) {
   const [text, shape, fill, color, outline, font, anim] = def;
   return { kind: "text", text: text === "Plain bold" ? "AWESOME" : text, shape, fill, color, outline, font, anim, speed: 1, size: 300, popIn: true };
 }
-export const stickerName = (s) => (s.kind === "emoji" ? `${s.emoji} sticker` : s.kind === "face" ? "Premium face" : `“${(s.text || "").replace(/\n/g, " ")}” sticker`);
+export const stickerName = (s) => (s.kind === "emoji" ? `${s.emoji} sticker` : s.kind === "face" ? "Premium face" : s.kind === "singer" ? "Singing chibi"
+  : s.kind === "peek" ? "Peeking animal" : s.kind === "pet" ? "Walking pet" : `“${(s.text || "").replace(/\n/g, " ")}” sticker`);
 
 export const newFaceSticker = ([shape, mood, palette, anim]) => ({ kind: "face", shape, mood, palette, anim, speed: 1, size: 260, popIn: true });
 export const newSceneSticker = ([emoji, anim, scene, glow]) => ({ kind: "emoji", emoji, anim, scene, glow, speed: 1, size: 280, popIn: true });
 export const newElegantSticker = ([text, palette, effect, font]) => ({ kind: "text", shape: "elegant", text, palette, effect, font, anim: "none", speed: 1, size: 300, popIn: false, writeDur: 1.8 });
+
+/** Pets walk across the screen: how far the pet is from the layer's position now (pixels on a 1920-wide frame). */
+export function stickerOffset(s, t) {
+  if (s.kind !== "pet") return 0;
+  return petState(s, t * (s.speed ?? 1)).x * (s.range ?? 1400) / 2;
+}
+
+/** Singers, peekers and pets. absT = time on the timeline (the singers follow the music there). */
+function drawCharacter(c, s, z, t, k, absT) {
+  const W = z.w * k, H = z.h * k, ts = t * (s.speed ?? 1);
+  c.save();
+  if (s.kind === "singer") {
+    let level, beat;
+    if (absT != null && viz.data) { level = Math.min(1, levelAt(absT) * (s.sens ?? 1)); beat = Math.min(1, beatAt(absT) * (s.sens ?? 1)); }
+    else { // no music analysed (library preview): a made-up singing rhythm
+      const syl = Math.max(0, Math.sin(ts * 9)) * (0.5 + 0.5 * Math.sin(ts * 2.3)); level = 0.15 + 0.7 * syl; beat = Math.pow(Math.max(0, Math.sin(ts * Math.PI * 2)), 8);
+    }
+    c.translate(0, -H * 0.06);
+    drawSinger(c, s, H * 0.27, ts, level, beat);
+  } else if (s.kind === "peek") {
+    drawPeek(c, s, W, H, ts);
+  } else {
+    const st = petState(s, ts);
+    c.translate(st.x * (s.range ?? 1400) / 2 * k, H * 0.42);
+    if (st.dir < 0) c.scale(-1, 1);
+    drawPet(c, s, H * 0.42, st, ts);
+  }
+  c.restore();
+}
+
+export const newSinger = ([who, shirt]) => ({ kind: "singer", who, shirt, speed: 1, size: 300, sens: 1, anim: "none", popIn: false });
+export const newPeeker = (who) => ({ kind: "peek", who, speed: 1, size: 280, anim: "none", popIn: false });
+export const newWalker = (pet) => ({ kind: "pet", pet, speed: 1, size: 230, range: 1500, anim: "none", popIn: false });

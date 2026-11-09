@@ -14,7 +14,7 @@ export const viz = { data: null, pending: null, key: "" };
 /** True when anything in the project needs the analysis (a visualizer layer or a beat-synced clip). */
 export function vizUsed(project) {
   if (!project) return false;
-  if ((project.texts || []).some((t) => t.viz)) return true;
+  if ((project.texts || []).some((t) => t.viz || t.sticker?.kind === "singer")) return true; // singing chibis follow the music too
   return [...(project.main || []), ...(project.overlays || [])].some((c) => c.beat?.type && c.beat.type !== "off");
 }
 

@@ -2,7 +2,7 @@
 // Clips use Canvas 2D; transitions blend two clip frames in a WebGL shader; colour, filters and
 // effects run in fx.js. Layer order, bottom to top: main track → overlay tracks → timeline effects → texts.
 import { frameImage } from "./frames.js";
-import { drawStickerAt, stickerSize } from "./stickers.js";
+import { drawStickerAt, stickerSize, stickerOffset } from "./stickers.js";
 import { layoutMain, getState } from "./store.js";
 import { proxySrc } from "./proxy.js";
 import { valueAt, propAt } from "./keyframes.js";
@@ -771,7 +771,8 @@ export function itemBounds(project, kind, item, W, H, t) {
   if (item.sticker) {
     const z = stickerSize(item.sticker), k = W / 1920;
     const tr = t == null ? { x: item.x, y: item.y, scale: item.scale || 1, rotation: item.rotation || 0 } : transformAt(item, lt, true);
-    return { cx: tr.x, cy: tr.y, w: (z.w * k * tr.scale) / W, h: (z.h * k * tr.scale) / H, rotation: tr.rotation };
+    const off = (stickerOffset(item.sticker, lt) * k * tr.scale) / W; // walking pets: the box follows the pet
+    return { cx: tr.x + off * Math.cos((tr.rotation * Math.PI) / 180), cy: tr.y + (off * W * Math.sin((tr.rotation * Math.PI) / 180)) / H, w: (z.w * k * tr.scale) / W, h: (z.h * k * tr.scale) / H, rotation: tr.rotation };
   }
   if (item.frame) {
     const tr = t == null ? { x: item.x, y: item.y, scale: item.scale || 1, rotation: item.rotation || 0 } : transformAt(item, lt, true);
@@ -846,7 +847,7 @@ export function drawText(ctx, item, t, W, H) {
   ctx.rotate((tr.rotation * Math.PI) / 180);
   ctx.scale(a.scale * tr.scale, a.scale * tr.scale);
   if (item.shape) { drawShape(ctx, item.shape, W / 1920); ctx.restore(); return; }
-  if (item.sticker) { drawStickerAt(ctx, item.sticker, lt, item.dur, W / 1920); ctx.restore(); return; }
+  if (item.sticker) { drawStickerAt(ctx, item.sticker, lt, item.dur, W / 1920, t); ctx.restore(); return; }
   ctx.font = textFont(st, size);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";

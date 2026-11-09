@@ -2,7 +2,9 @@
 import { useEffect, useRef, useState } from "react";
 import { getState, setState, edit, editLive, uid, findItem, defaultTextStyle, freeTrack } from "../store.js";
 import { EMOJI_GROUPS, TEXT_STICKERS, STICKER_ANIMS, STICKER_SHAPES, STICKER_FONTS, drawStickerAt, stickerSize, newEmojiSticker, newTextSticker,
-  PREMIUM_FACES, ANIMATED_ELEMENTS, ELEMENT_CATEGORIES, ELEGANT_STICKERS, newFaceSticker, newSceneSticker, newElegantSticker } from "../stickers.js";
+  PREMIUM_FACES, ANIMATED_ELEMENTS, ELEMENT_CATEGORIES, ELEGANT_STICKERS, newFaceSticker, newSceneSticker, newElegantSticker,
+  SINGERS, PEEKERS, WALKERS, newSinger, newPeeker, newWalker } from "../stickers.js";
+import { CHARACTERS, PETS } from "../chibi.js";
 import { FACE_SHAPES, FACE_MOODS, FACE_PALETTES, SCENE_FX, ELEGANT_PALETTES, ELEGANT_FX, ELEGANT_FONTS } from "../stickerart.js";
 import { loadFont } from "./fonts.js";
 import { html, Field, Section, Slider } from "./kit.js";
@@ -16,11 +18,14 @@ const loadStickerFonts = () => {
 /** Adds a sticker at the playhead, in the middle of the picture (selected, ready to move and edit). */
 export function addSticker(sticker) {
   loadStickerFonts();
-  const { time } = getState();
+  const { time, project } = getState();
   const id = uid();
-  const dur = Math.max(1, setting("textDur") || 3);
+  // Characters stay longer (a song, a walk across the screen); peekers sit on the bottom edge, pets walk along the bottom.
+  const dur = sticker.kind === "pet" || sticker.kind === "singer" || sticker.kind === "peek" ? Math.max(8, setting("textDur") || 3) : Math.max(1, setting("textDur") || 3);
+  const h = (stickerSize(sticker).h * (project.width / 1920)) / project.height;
+  const y = sticker.kind === "peek" ? 1 - h / 2 : sticker.kind === "pet" ? 0.97 - h / 2 : 0.45;
   edit((p) => p.texts.push({
-    id, start: time, dur, text: "", x: 0.5, y: 0.45, scale: 1, rotation: 0, opacity: 1, track: freeTrack(p.texts, time, dur),
+    id, start: time, dur, text: "", x: 0.5, y, scale: 1, rotation: 0, opacity: 1, track: freeTrack(p.texts, time, dur),
     sticker, style: defaultTextStyle(), anim: { in: { type: "none", dur: 0.3 }, out: { type: "fade", dur: 0.25 } },
   }));
   setState({ selection: [{ kind: "text", id }] });
@@ -84,6 +89,21 @@ export function StickersTab({ part = "emoji" }) {
 
 /** Elements › animated elements ("GIFs"): colourful moving emoji scenes by category. */
 export function AnimatedElementsTab({ part }) {
+  if (part === "singers" || part === "peekers" || part === "pets") {
+    const items = part === "singers" ? SINGERS.map((d) => [d[0], newSinger(d), CHARACTERS[d[0]].name])
+      : part === "peekers" ? PEEKERS.map((w) => [w, newPeeker(w), CHARACTERS[w].name]) : WALKERS.map((w) => [w, newWalker(w), PETS[w].name]);
+    const info = { singers: ["Singing chibis", "Cute singers whose mouths move with your project's music and who bob to the beat. Point at one to see it sing."],
+      peekers: ["Peeking animals", "Tiny animals that pop up from the bottom of the screen, look around, blink and hide again. Choose another edge on the right."],
+      pets: ["Walking pets", "Pets that walk across the screen and stop to sit, wag, sniff, hop or peck. They stay for 8 seconds; make them longer on the timeline."] }[part];
+    return html`<div>
+      <b class="lib-title">${info[0]}</b>
+      <p class="muted small">${info[1]}</p>
+      <div class="sticker-grid scene">
+        ${items.map(([k, st, name]) => html`<button key=${k} class="sticker-btn" title=${`Add ${name.toLowerCase()}`} onClick=${() => addSticker(st)}>
+          <${StickerThumb} sticker=${part === "pets" ? { ...st, range: 0 } : st} size=${76} still=${part === "peekers" ? 1.8 : 0.6} /><span class="sticker-name">${name}</span></button>`)}
+      </div>
+    </div>`;
+  }
   const list = ANIMATED_ELEMENTS[part] || ANIMATED_ELEMENTS.emotions;
   const name = ELEMENT_CATEGORIES.find(([k]) => k === part)?.[1] || "Emotions";
   return html`<div>
@@ -102,8 +122,24 @@ export function StickerFields({ t }) {
   const set = (fn, live) => (live ? editLive : edit)((p) => { const x = findItem(p, "text", t.id); if (x) { x.sticker = { ...x.sticker }; fn(x.sticker); } });
   const allEmoji = EMOJI_GROUPS.flatMap(([, l]) => l);
   return html`<div>
-    <${Section} title=${s.kind === "emoji" ? "Emoji" : s.kind === "face" ? "Premium face" : "Words & look"}>
-      ${s.kind === "face" ? html`
+    <${Section} title=${s.kind === "emoji" ? "Emoji" : s.kind === "face" ? "Premium face" : s.kind === "singer" ? "Singer" : s.kind === "peek" ? "Peeking animal" : s.kind === "pet" ? "Pet" : "Words & look"}>
+      ${s.kind === "singer" ? html`
+        <${Field} label="Who"><select value=${s.who} onChange=${(e) => set((x) => (x.who = e.target.value))}>${SINGERS.map(([k]) => html`<option key=${k} value=${k}>${CHARACTERS[k].name}</option>`)}</select><//>
+        <${Field} label="Clothes colour"><input type="color" value=${s.shirt || "#ff3c8e"} onChange=${(e) => set((x) => (x.shirt = e.target.value))} /><//>
+        <${Slider} label="Mouth sensitivity" value=${s.sens ?? 1} min=${0.3} max=${3} step=${0.05} format=${(v) => `${Math.round(v * 100)}%`} onChange=${(v, live) => set((x) => (x.sens = v), live)} />
+        <p class="muted small">The mouth opens with the music in your project and the singer bobs on the beat. Turn the sensitivity up for quiet songs.</p>`
+      : s.kind === "peek" ? html`
+        <${Field} label="Who"><select value=${s.who} onChange=${(e) => set((x) => (x.who = e.target.value))}>${PEEKERS.map((k) => html`<option key=${k} value=${k}>${CHARACTERS[k].name}</option>`)}</select><//>
+        <${Field} label="Peek in from">
+          <div class="anim-chips">${[["bottom", "Bottom"], ["left", "Left"], ["right", "Right"], ["top", "Top"]].map(([k, n]) => html`<button key=${k} class="chip" onClick=${() => peekFrom(t, k)}>${n}</button>`)}</div>
+        <//>
+        <p class="muted small">It peeks up, looks around, then hides, every few seconds. Drag it along the edge in the player to choose where.</p>`
+      : s.kind === "pet" ? html`
+        <${Field} label="Pet"><select value=${s.pet} onChange=${(e) => set((x) => (x.pet = e.target.value))}>${WALKERS.map((k) => html`<option key=${k} value=${k}>${PETS[k].name}</option>`)}</select><//>
+        <${Slider} label="How far it walks" value=${s.range ?? 1500} min=${0} max=${1900} step=${10} format=${(v) => (v ? `${Math.round((v / 1920) * 100)}% of the width` : "Stays put")}
+          onChange=${(v, live) => set((x) => (x.range = v), live)} />
+        <p class="muted small">It walks across, stops to do pet things, then walks back, for as long as it's on the timeline.</p>`
+      : s.kind === "face" ? html`
         <${Field} label="Shape">
           <select value=${s.shape} onChange=${(e) => set((x) => (x.shape = e.target.value))}>${FACE_SHAPES.map(([k, n]) => html`<option key=${k} value=${k}>${n}</option>`)}</select>
         <//>
@@ -172,7 +208,9 @@ export function StickerFields({ t }) {
       <${Slider} label="Size" value=${s.size ?? 220} min=${60} max=${900} step=${1} format=${(v) => String(Math.round(v))}
         onChange=${(v, live) => set((x) => (x.size = Math.round(v)), live)} />
     <//>
-    <${Section} title="Sticker animation">
+    ${["singer", "peek", "pet"].includes(s.kind) ? html`<${Section} title="Movement">
+      <${Slider} label="Speed" value=${s.speed ?? 1} min=${0.3} max=${2.5} step=${0.05} format=${(v) => `${v.toFixed(2)}×`} onChange=${(v, live) => set((x) => (x.speed = v), live)} />
+    <//>` : html`<${Section} title="Sticker animation">
       <div class="anim-chips">
         ${STICKER_ANIMS.map(([k, n]) => html`<button key=${k} class=${"chip" + ((s.anim || "bounce") === k ? " on" : "")} onClick=${() => set((x) => (x.anim = k))}>${n}</button>`)}
       </div>
@@ -181,6 +219,21 @@ export function StickerFields({ t }) {
       <label class="check"><input type="checkbox" checked=${s.popIn !== false} onChange=${(e) => set((x) => (x.popIn = e.target.checked))} /> Pop in when it appears</label>
       <label class="check"><input type="checkbox" checked=${!!s.sparkles} onChange=${(e) => set((x) => (x.sparkles = e.target.checked))} /> Sparkles around it</label>
       <p class="muted small">The sticker keeps moving for as long as it's on the timeline. The Animation tab adds a way in and out (fade, slide…).</p>
-    <//>
+    <//>`}
   </div>`;
+}
+
+/** Puts a peeking animal on an edge of the picture (it peeks in from that side). */
+function peekFrom(t, edge) {
+  edit((p) => {
+    const x = findItem(p, "text", t.id);
+    if (!x) return;
+    const z = stickerSize(x.sticker), k = p.width / 1920, half = (z.h * k * (x.scale || 1)) / 2;
+    x.rotation = { bottom: 0, top: 180, left: 90, right: -90 }[edge];
+    if (edge === "bottom") { x.x = 0.5; x.y = 1 - half / p.height; }
+    if (edge === "top") { x.x = 0.5; x.y = half / p.height; }
+    if (edge === "left") { x.x = half / p.width; x.y = 0.55; }
+    if (edge === "right") { x.x = 1 - half / p.width; x.y = 0.55; }
+    if (x.keyframes) for (const key of ["x", "y", "rotation"]) delete x.keyframes[key];
+  });
 }

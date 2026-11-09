@@ -249,8 +249,10 @@ const LIB_TABS = [
 
 const SUB_NAV = {
   media: [["library", "Library"], ["kits", "My kits"]],
-  elements: [["emotions", "Emotions"], ["animals", "Cute animals"], ["weather", "Weather"], ["drinks", "Drinks"], ["vehicles", "Vehicles"],
-    ["furniture", "Household & furniture"], ["clothing", "Clothing"], ["people", "People"], ["mine", "My elements"]],
+  elements: [["singers", "Singing chibis"], ["peekers", "Peeking animals"], ["pets", "Walking pets"], ["emotions", "Emotions"], ["animals", "Cute animals"],
+    ["weather", "Weather"], ["drinks", "Drinks"], ["vehicles", "Vehicles"], ["furniture", "Household & furniture"], ["clothing", "Clothing"], ["people", "People"],
+    ["church", "Church"], ["holy", "Holy"], ["christmas", "Christmas"], ["music", "Music"], ["gadgets", "Gadgets"], ["leisure", "Leisure"], ["travel", "Travel"],
+    ["mine", "My elements"]],
   shapes: [["basic", "Shapes"], ["arrows", "Arrows"]],
   stickers: [["emoji", "Emoji"], ["text", "Text stickers"]],
   frames: [["all", "All frames"], ["paper", "Paper"], ["elegant", "Elegant"], ["fun", "Fun & film"]],

@@ -153,7 +153,7 @@ export function drawFace(c, s, R, t, k) {
 
 // ---------- scene effects around emoji (animated "GIF" elements) ----------
 
-export const SCENE_FX = [["none", "None"], ["hearts", "Floating hearts"], ["sparkle", "Sparkles"], ["confetti", "Confetti"], ["tears", "Tears"], ["steam", "Steam"],
+export const SCENE_FX = [["none", "None"], ["halo", "Halo"], ["lights", "Twinkle lights"], ["hearts", "Floating hearts"], ["sparkle", "Sparkles"], ["confetti", "Confetti"], ["tears", "Tears"], ["steam", "Steam"],
   ["zzz", "Zzz"], ["rain", "Rain"], ["snow", "Snow"], ["rays", "Sun rays"], ["lightning", "Lightning"], ["bubbles", "Bubbles"], ["speed", "Speed lines"],
   ["notes", "Music notes"], ["dust", "Dust puffs"], ["shine", "Shine"], ["fizz", "Fizz"], ["petals", "Petals"], ["flame", "Flame"], ["anger", "Anger puffs"]];
 
@@ -237,6 +237,21 @@ export function sceneFront(c, s, R, t) {
     case "shine": { const d = (t * 0.6) % 1.6; if (d < 1) { c.globalAlpha = Math.sin(d * Math.PI) * 0.9; c.globalCompositeOperation = "lighter"; const x = -R + d * R * 2; const g = c.createLinearGradient(x - R * 0.3, 0, x + R * 0.3, 0); g.addColorStop(0, "rgba(255,255,255,0)"); g.addColorStop(0.5, "rgba(255,255,255,0.8)"); g.addColorStop(1, "rgba(255,255,255,0)"); c.fillStyle = g; c.beginPath(); c.arc(0, 0, R * 0.85, 0, TAU); c.fill(); }
       parts(3, 1.6, (i, d2) => { c.globalAlpha = Math.sin(d2 * Math.PI); spark((hash(i, 6) - 0.5) * R * 1.4, (hash(i, 7) - 0.5) * R * 1.4, R * 0.12, "#ffffff"); }); break; }
     case "petals": parts(10, 3, (i, d) => { c.globalAlpha = 0.9; c.fillStyle = i % 2 ? "#ffb7d5" : "#ff8fb8"; c.save(); c.translate((hash(i, 1) - 0.5) * R * 2.2 + Math.sin(d * 5 + i) * R * 0.2, -R * 1.1 + d * R * 2.2); c.rotate(d * 8 + i); c.beginPath(); c.ellipse(0, 0, R * 0.07, R * 0.04, 0, 0, TAU); c.fill(); c.restore(); }); break;
+    case "halo": { // a golden halo floating above
+      const bob = Math.sin(t * 2) * R * 0.05;
+      c.save(); c.shadowColor = "#ffd23f"; c.shadowBlur = R * 0.25; c.strokeStyle = "#ffe066"; c.lineWidth = R * 0.07;
+      c.beginPath(); c.ellipse(0, -R * 0.95 + bob, R * 0.42, R * 0.12, 0, 0, TAU); c.stroke(); c.restore();
+      parts(3, 1.6, (i, d) => { c.globalAlpha = Math.sin(d * Math.PI); spark((i - 1) * R * 0.4, -R * (1.05 + d * 0.15), R * 0.07, "#fff6c9"); });
+      break; }
+    case "lights": { // a string of coloured bulbs that twinkle
+      c.strokeStyle = "rgba(40,60,40,0.8)"; c.lineWidth = R * 0.025; c.beginPath(); c.arc(0, R * 0.1, R * 0.95, Math.PI * 1.05, Math.PI * 1.95); c.stroke();
+      for (let i = 0; i < 9; i++) {
+        const a = Math.PI * (1.08 + (i / 8) * 0.84), x = Math.cos(a) * R * 0.95, y = R * 0.1 + Math.sin(a) * R * 0.95;
+        const on = Math.sin(t * 4 + i * 1.7) > -0.2, col = ["#ff2d2d", "#ffd23f", "#39d353", "#3d8bff", "#ff71ce"][i % 5];
+        c.save(); if (on) { c.shadowColor = col; c.shadowBlur = R * 0.2; } c.globalAlpha = on ? 1 : 0.35; c.fillStyle = col;
+        c.beginPath(); c.ellipse(x, y + R * 0.05, R * 0.045, R * 0.07, 0, 0, TAU); c.fill(); c.restore();
+      }
+      break; }
     case "anger": parts(3, 1.2, (i, d) => { c.globalAlpha = 1 - d; c.fillStyle = "rgba(255,255,255,0.8)"; c.beginPath(); c.arc((i - 1) * R * 0.5, -R * (0.75 + d * 0.4), R * (0.08 + d * 0.12), 0, TAU); c.fill(); }); break;
     default: break;
   }
